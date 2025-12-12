@@ -4,9 +4,9 @@ import { Link as ScrollLink } from "react-scroll";
 import { Link as RouterLink } from "react-router-dom";
 import { FaChevronDown } from 'react-icons/fa';
 import RotatingText from './Rotatingtext';
-import img1 from '../assets/h4.webp'; 
-import img2 from '../assets/h5.webp';
-import img3 from '../assets/h6.webp';
+import img1 from '../assets/h4.jpg'; 
+import img2 from '../assets/h5.jpg';
+import img3 from '../assets/h6.jpg';
 
 const Hero = () => {
   const words = ["Cinematic", "Wedding", "Pre-Wedding", "Haldi", "Candid"];
