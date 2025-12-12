@@ -4,10 +4,13 @@ import { Link as ScrollLink } from "react-scroll";
 import { Link as RouterLink } from "react-router-dom";
 import { FaChevronDown } from 'react-icons/fa';
 import RotatingText from './Rotatingtext';
+import img1 from '../assets/h4.webp'; 
+import img2 from '../assets/h5.webp';
+import img3 from '../assets/h6.webp';
 
 const Hero = () => {
   const words = ["Cinematic", "Wedding", "Pre-Wedding", "Haldi", "Candid"];
-  const bgImages = ["/h4.webp", "/h5.webp", "/h6.webp"];
+  const bgImages = [img1, img2, img3];
   const [bgIndex, setBgIndex] = useState(0);
 
   // Preload images for smooth fade
