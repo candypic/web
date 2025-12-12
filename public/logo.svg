@@ -1,0 +1,31 @@
+<svg width="500" height="150" viewBox="0 0 500 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+      .main-text {
+        font-family: 'Century Gothic', 'Futura', 'Montserrat', sans-serif;
+        font-weight: bold;
+        font-size: 80px;
+      }
+      .tagline {
+        font-family: 'Century Gothic', 'Futura', 'Montserrat', sans-serif;
+        font-weight: 400;
+        font-size: 24px;
+        letter-spacing: 1px;
+      }
+    </style>
+  </defs>
+
+  <!-- Main Logo Text -->
+  <text x="50%" y="80" text-anchor="middle" class="main-text">
+    <tspan fill="#FF0000">C</tspan>
+    <tspan fill="#FFFFFF">andy</tspan>
+    <tspan dx="15" fill="#FF0000">P</tspan>
+    <tspan fill="#FFFFFF">ic</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="50%" y="120" text-anchor="middle" class="tagline" fill="#CCCCCC">
+    We Capture Your Memories
+  </text>
+</svg>

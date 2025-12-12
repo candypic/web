@@ -16,7 +16,7 @@ const About = () => {
         >
             <div className="absolute -top-4 -left-4 w-full h-full border-2 border-brand-red/50 rounded-lg"></div>
             <img 
-                src="https://images.unsplash.com/photo-1554048612-387768052bf7?q=80&w=1000&auto=format&fit=crop" 
+                src="/chandan.jpg" 
                 alt="Chandan Naik" 
                 className="rounded-lg shadow-2xl relative z-10 w-full object-cover  grayscale hover:grayscale-0 transition-all duration-500" 
             />

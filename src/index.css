@@ -1,1 +1,5 @@
 @import "tailwindcss";
+body {
+  /* Ensure the background is solid deep teal */
+  @apply bg-[#0b262d] text-[#f4f4f4] font-sans overflow-x-hidden; 
+}
