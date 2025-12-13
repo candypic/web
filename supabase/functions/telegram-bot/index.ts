@@ -48,6 +48,62 @@ serve(async (req) => {
 })
 
 // ------------------------------------------------------------------
+// 🔔 DATABASE NOTIFICATION HANDLER (Modified for Custom vs Full)
+// ------------------------------------------------------------------
+async function handleDatabaseNotification(req: any) {
+    try {
+      const payload = await req.json()
+      const booking = payload.record 
+      if (!booking) return new Response('No record', { status: 400 })
+
+      // Check Clashes
+      const { data: clashData } = await supabase.from('bookings').select('client_name, assigned_to').eq('booking_date', booking.booking_date).eq('status', 'confirmed').maybeSingle()
+
+      // --- DETERMINE MESSAGE STYLE ---
+      const eventType = booking.event_type || "General Inquiry";
+      let header = "<b>✨ NEW ENQUIRY ✨</b>";
+      let icon = "📷";
+      
+      // 1. FULL PACKAGE
+      if (eventType.includes("Full Wedding Collection")) {
+          header = "<b>💎 PREMIUM PACKAGE BOOKING 💎</b>";
+          icon = "💍";
+      } 
+      // 2. CUSTOM REQUEST
+      else if (eventType.includes("Custom")) {
+          header = "<b>🛠 CUSTOM QUOTE REQUEST 🛠</b>";
+          icon = "📝";
+      }
+
+      // --- BUILD MESSAGE ---
+      let message = `${header}\n`
+      
+      if (clashData) {
+          const assignee = clashData.assigned_to ? clashData.assigned_to : "Unassigned"
+          message += `\n🚨 <b>CLASH ALERT:</b> Date booked for ${clashData.client_name} (${assignee}).\n`
+      }
+      
+      message += `\n👤 <b>Client:</b> ${booking.client_name}`
+      message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
+      message += `\n🗓 <b>Date:</b> ${booking.booking_date}`
+      
+      // Show specific details for Custom/Full
+      message += `\n${icon} <b>Request:</b> ${eventType.replace('Custom Quote Request', 'Selected Items')}`
+
+      message += `\n\n<i>Select an action below:</i>`
+
+      const keyboard = {
+        inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `menu_${booking.id}` }, { text: "❌ Reject", callback_data: `reject_${booking.id}` } ]]
+      }
+
+      await sendMessage(CHAT_ID, message, keyboard)
+      return new Response('Notification Sent', { status: 200 })
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500 })
+    }
+}
+
+// ------------------------------------------------------------------
 // 📩 MESSAGE HANDLER (Text Inputs)
 // ------------------------------------------------------------------
 async function handleMessage(msg: any) {
@@ -73,11 +129,11 @@ async function handleMessage(msg: any) {
   if (msg.reply_to_message) {
     const replyText = msg.reply_to_message.text
     
-    // 1. RECEIVE START DATE -> ASK END DATE MODE
+    // 1. START DATE -> END DATE
     if (replyText.includes("Reply with the START DATE")) {
       if (!validateDate(text)) return sendError(chatId, "Invalid Date. Use YYYY-MM-DD.", msg.message_id)
 
-      const context = extractContext(replyText) // "Wedding|Chandan"
+      const context = extractContext(replyText) 
       const [evt, team] = context.split('|')
 
       const keyboard = {
@@ -89,29 +145,25 @@ async function handleMessage(msg: any) {
       await sendMessage(chatId, `Step 4: Select <b>End Date</b> logic:\n\n[CTX:${context}|${text}]`, keyboard)
     }
 
-    // 2. RECEIVE MANUAL END DATE -> ASK NAME
+    // 2. END DATE -> NAME
     else if (replyText.includes("Reply with the END DATE")) {
       if (!validateDate(text)) return sendError(chatId, "Invalid Date. Use YYYY-MM-DD.", msg.message_id)
-      
-      const context = extractContext(replyText) // "Wedding|Chandan|2025-12-25"
-      // Context becomes: Event|Team|Start|End
+      const context = extractContext(replyText)
       askForName(chatId, `${context}|${text}`)
     }
 
-    // 3. RECEIVE NAME -> ASK PHONE
+    // 3. NAME -> PHONE
     else if (replyText.includes("Reply with CLIENT NAME")) {
-      const context = extractContext(replyText) // "Wedding|Chandan|2025-12-25|2025-12-25"
-      // Context becomes: Event|Team|Start|End|Name
+      const context = extractContext(replyText)
       askForPhone(chatId, `${context}|${text}`)
     }
 
-    // 4. RECEIVE PHONE -> INSERT DB
+    // 4. PHONE -> SAVE
     else if (replyText.includes("Reply with CLIENT PHONE")) {
-      const context = extractContext(replyText) // "Wedding|Chandan|2025-12-25|2025-12-25|John Doe"
+      const context = extractContext(replyText)
       const [evt, team, start, end, name] = context.split('|')
       const phone = text
 
-      // VALIDATE DATA BEFORE INSERT
       if (!start || !name || !phone) {
          return sendError(chatId, "Missing data. Please restart /create_booking", msg.message_id)
       }
@@ -148,39 +200,29 @@ async function handleCallback(query: any) {
 
   // --- WIZARD FLOW ---
   if (action === "new") {
-    const step = parts[1] // "evt", "team", "end"
+    const step = parts[1]
     
-    // Step 2: Event Selected -> Ask Team
     if (step === "evt") {
       const evtType = parts[2]
       const teamButtons = TEAM_MEMBERS.map(m => [{ text: m.name, callback_data: `new_team_${evtType}_${m.id}` }])
       await editMessage(chatId, msgId, `Event: ${evtType}\n\nStep 2: Assign <b>Team Member</b>:\n\n[CTX:${evtType}]`, { inline_keyboard: teamButtons })
     }
-    
-    // Step 3: Team Selected -> Ask Start Date
     else if (step === "team") {
       const evtType = parts[2]
       const teamId = parts.slice(3).join('_')
-      // Context: Event|Team
       await sendMessage(chatId, `Event: ${evtType}\nTeam: ${teamId}\n\nStep 3: Reply with the <b>START DATE</b> (YYYY-MM-DD):\n\n[CTX:${evtType}|${teamId}]`, null, true)
     }
-
-    // Step 4a: End Date SAME -> Ask Name
     else if (step === "end" && parts[2] === "same") {
        const [_, __, ___, evt, team, start] = parts
-       // Context: Event|Team|Start|Start
        askForName(chatId, `${evt}|${team}|${start}|${start}`)
     }
-
-    // Step 4b: End Date DIFF -> Ask End Date
     else if (step === "end" && parts[2] === "diff") {
        const [_, __, ___, evt, team, start] = parts
-       // Context: Event|Team|Start
        await sendMessage(chatId, `Start: ${start}\n\nStep 4: Reply with the <b>END DATE</b> (YYYY-MM-DD):\n\n[CTX:${evt}|${team}|${start}]`, null, true)
     }
   }
 
-  // --- EXISTING LOGIC (Approve/Reject) ---
+  // --- APPROVE/REJECT FLOW ---
   else if (action === 'menu') {
       const bookingId = parts[1]
       const teamButtons = TEAM_MEMBERS.map(m => ([{ text: `👤 Assign to ${m.name}`, callback_data: `set_${bookingId}_${m.id}` }]))
@@ -214,35 +256,8 @@ async function handleCallback(query: any) {
 }
 
 // ------------------------------------------------------------------
-// HELPERS & DATABASE TRIGGERS
+// HELPERS
 // ------------------------------------------------------------------
-
-async function handleDatabaseNotification(req: any) {
-    try {
-      const payload = await req.json()
-      const booking = payload.record 
-      if (!booking) return new Response('No record', { status: 400 })
-
-      const { data: clashData } = await supabase.from('bookings').select('client_name, assigned_to').eq('booking_date', booking.booking_date).eq('status', 'confirmed').maybeSingle()
-
-      let message = `<b>✨ NEW WEB ENQUIRY ✨</b>\n`
-      if (clashData) message += `\n🚨 <b>CLASH ALERT:</b> Booked for ${clashData.client_name} (${clashData.assigned_to})\n`
-      
-      message += `\n👤 <b>Client:</b> ${booking.client_name}`
-      message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
-      message += `\n🗓 <b>Date:</b> ${booking.booking_date}`
-      message += `\n\n<i>Select an action below:</i>`
-
-      const keyboard = {
-        inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `menu_${booking.id}` }, { text: "❌ Reject", callback_data: `reject_${booking.id}` } ]]
-      }
-
-      await sendMessage(CHAT_ID, message, keyboard)
-      return new Response('Notification Sent', { status: 200 })
-    } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), { status: 500 })
-    }
-}
 
 async function handleCalendarCommand(chatId: number) {
     const today = new Date().toISOString().split('T')[0]
@@ -270,21 +285,16 @@ async function handleCalendarCommand(chatId: number) {
 }
 
 function askForName(chatId: number, contextString: string) {
-    // Context: evt|team|start|end
     sendMessage(chatId, `Step 5: Reply with <b>CLIENT NAME</b>:\n\n[CTX:${contextString}]`, null, true)
 }
 
 function askForPhone(chatId: number, contextString: string) {
-    // Context: evt|team|start|end|name
     sendMessage(chatId, `Step 6: Reply with <b>PHONE NUMBER</b>:\n\n[CTX:${contextString}]`, null, true)
 }
 
-function validateDate(dateStr: string) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
-}
+function validateDate(dateStr: string) { return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) }
 
 function extractContext(text: string) {
-    // We look for the hidden tag [CTX:...]
     const match = text.match(/\[CTX:(.*?)\]/)
     return match ? match[1] : ""
 }
