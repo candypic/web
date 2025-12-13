@@ -88,13 +88,20 @@ const AdminCalendar = () => {
           }));
           
           // Auto-fill the first contact's info into the main fields
-          // And add all selected names to the 'assignedTo' list
-          setFormData(prev => ({
-            ...prev,
-            clientName: selectedContacts[0].name,
-            clientPhone: selectedContacts[0].phone,
-            assignedTo: [...new Set([...prev.assignedTo, ...selectedContacts.map(c => c.name)])] // Avoid duplicates
-          }));
+          // And add all selected contacts to the 'assignedTo' list
+          setFormData(prev => {
+            // Filter out duplicates based on phone number or name if phone is missing
+            const newContacts = selectedContacts.filter(
+                sc => !prev.assignedTo.some(existing => existing.phone === sc.phone && existing.name === sc.name)
+            );
+            
+            return {
+                ...prev,
+                clientName: selectedContacts[0].name,
+                clientPhone: selectedContacts[0].phone,
+                assignedTo: [...prev.assignedTo, ...newContacts]
+            };
+          });
         }
       } catch (ex) {
         console.error('Error selecting contacts:', ex);
@@ -123,7 +130,10 @@ const AdminCalendar = () => {
             
             client_name: isBlocking ? 'Date Blocked' : formData.clientName,
             client_phone: formData.clientPhone || null,
-            assigned_to: formData.assignedTo.length > 0 ? formData.assignedTo.join(', ') : null,
+            // Format: "Name (Phone), Name (Phone)"
+            assigned_to: formData.assignedTo.length > 0
+                ? formData.assignedTo.map(c => `${c.name} (${c.phone})`).join(', ')
+                : null,
             additional_info: formData.additionalInfo || null,
             // Only save end date if it's different from start date
             booking_end_date: formData.endDate !== formattedStartDate ? formData.endDate : null
@@ -319,11 +329,12 @@ const AdminCalendar = () => {
                           <label className="text-xs text-gray-400 flex items-center gap-2 mb-2">
                               <FaUserTag /> Assigned
                           </label>
-                          <div className="flex flex-wrap gap-2">
-                              {formData.assignedTo.map((name, index) => (
-                                  <span key={index} className="bg-white/10 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1">
-                                      {name}
-                                  </span>
+                          <div className="flex flex-col gap-2">
+                              {formData.assignedTo.map((contact, index) => (
+                                  <div key={index} className="bg-white/10 text-white text-xs font-semibold px-3 py-2 rounded-lg flex justify-between items-center">
+                                      <span>{contact.name}</span>
+                                      <span className="text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded">{contact.phone}</span>
+                                  </div>
                               ))}
                           </div>
                       </div>
