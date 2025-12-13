@@ -87,8 +87,7 @@ const AdminCalendar = () => {
             phone: contact.tel[0]
           }));
           
-          // Auto-fill the first contact's info into the main fields
-          // And add all selected contacts to the 'assignedTo' list
+          // Add all selected contacts to the 'assignedTo' list WITHOUT auto-filling main fields
           setFormData(prev => {
             // Filter out duplicates based on phone number or name if phone is missing
             const newContacts = selectedContacts.filter(
@@ -97,8 +96,6 @@ const AdminCalendar = () => {
             
             return {
                 ...prev,
-                clientName: selectedContacts[0].name,
-                clientPhone: selectedContacts[0].phone,
                 assignedTo: [...prev.assignedTo, ...newContacts]
             };
           });
