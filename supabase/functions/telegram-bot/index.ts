@@ -84,7 +84,10 @@ async function handleDatabaseNotification(req: Request) {
       }
       
       message += `\n👤 <b>Client:</b> ${booking.client_name}`
-      if (booking.client_phone) message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
+      if (booking.client_phone) {
+          const formattedPhone = formatPhoneForDisplay(booking.client_phone);
+          message += `\n📞 <b>Phone:</b> <code>${formattedPhone}</code>`
+      }
       message += `\n🗓 <b>Date:</b> ${booking.booking_date}`
       if (booking.booking_end_date && booking.booking_end_date !== booking.booking_date) {
         message += ` to ${booking.booking_end_date}`
@@ -301,6 +304,7 @@ async function handleCalendarCommand(chatId: number) {
             responseMsg += `──────────────\n`
         })
     }
+    
     await sendMessage(chatId, responseMsg)
 }
 
@@ -330,6 +334,22 @@ async function sendMessage(chatId: string | number, text: string, markup?: unkno
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     })
+}
+
+function formatPhoneForDisplay(phone: string) {
+    // 1. Remove all whitespace
+    let clean = phone.replace(/\s+/g, '');
+    
+    // 2. Check for +91 prefix
+    if (!clean.startsWith('+91')) {
+        // If it starts with 91 but no plus, add plus (optional, but safer)
+        if (clean.startsWith('91') && clean.length > 10) {
+             clean = '+' + clean;
+        } else {
+             clean = '+91' + clean;
+        }
+    }
+    return clean;
 }
 
 async function sendError(chatId: number, text: string, replyToMsgId: number) {
