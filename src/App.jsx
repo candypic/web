@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Quotation from './pages/Quotation';
 import AdminCalendar from './pages/AdminCalendar';
 import Preloader from './components/Preloader';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -27,6 +28,7 @@ function App() {
       {/* 2. Main App Routing */}
       {!loading && (
         <Router>
+          <PwaInstallPrompt />
           {/* 'animate-fade-in' is a custom utility in your tailwind config */}
           <div className="font-sans antialiased bg-brand-dark text-brand-text min-h-screen animate-fade-in">
             <Routes>
