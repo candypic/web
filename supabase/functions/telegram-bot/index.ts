@@ -1,142 +1,315 @@
-// supabase/functions/telegram-bot/index.ts
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// ---------------- CONFIGURATION ----------------
 const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const CHAT_ID = Deno.env.get('TELEGRAM_CHAT_ID')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// Initialize Supabase Client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+// ---------------------------------------------------------
+// ⚙️ CONFIGURATION
+// ---------------------------------------------------------
+const TEAM_MEMBERS = [
+  { name: "Prajnan", id: "@S164527" },
+  { name: "Chandan", id: "Chandan" },
+  { name: "Rahul", id: "Rahul" }
+];
+
+const EVENT_TYPES = [
+  "Wedding", "Pre-Wedding", "Engagement", "Haldi", "Maternity", "Baby Shoot", "Other"
+];
+// ---------------------------------------------------------
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 serve(async (req) => {
   const url = new URL(req.url)
 
-  // ==================================================================
-  // CASE 1: NOTIFY (Triggered by Database Webhook on new INSERT)
-  // ==================================================================
+  // 1. DATABASE TRIGGER (New Website Enquiry)
   if (req.method === 'POST' && url.searchParams.get('type') === 'notify') {
-    const payload = await req.json()
-    const booking = payload.record 
-
-    if (!booking) return new Response('No record', { status: 400 })
-
-    // 1. CHECK FOR CLASHES
-    // We look for ANY other booking on this date that is 'confirmed'
-    const { data: clashData } = await supabase
-      .from('bookings')
-      .select('id, client_name')
-      .eq('booking_date', booking.booking_date)
-      .eq('status', 'confirmed')
-      .maybeSingle()
-
-    const hasClash = !!clashData
-
-    // 2. PREPARE MESSAGE
-    let message = `📸 *New Booking Enquiry!*`
-    
-    if (hasClash) {
-      message += `\n\n⚠️ *WARNING: DATE CLASH DETECTED!*`
-      message += `\nAlready booked for: ${clashData.client_name}`
-    }
-
-    message += `\n\n👤 *Name:* ${booking.client_name}`
-    message += `\n📞 *Phone:* \`${booking.client_phone}\``
-    message += `\n🗓 *Date:* ${booking.booking_date}`
-    message += `\n──────────────`
-
-    // 3. PREPARE BUTTONS
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: "✅ Approve", callback_data: `approve_${booking.id}` },
-          { text: "❌ Reject", callback_data: `reject_${booking.id}` }
-        ]
-      ]
-    }
-
-    // 4. SEND TO TELEGRAM
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-      })
-    })
-
-    return new Response('Notification Sent', { status: 200 })
+    return handleDatabaseNotification(req)
   }
 
-
-  // ==================================================================
-  // CASE 2: HANDLE BUTTON CLICKS (Webhook from Telegram)
-  // ==================================================================
+  // 2. TELEGRAM INTERACTION
   try {
     const update = await req.json()
 
-    // Check if this is a Button Click (Callback Query)
     if (update.callback_query) {
-      const query = update.callback_query
-      const data = query.data // e.g., "approve_12"
-      const messageId = query.message.message_id
-      const chatId = query.message.chat.id
-
-      const [action, bookingId] = data.split('_')
-
-      // 1. UPDATE SUPABASE
-      let newStatus = ''
-      let responseText = ''
-
-      if (action === 'approve') {
-        newStatus = 'confirmed'
-        responseText = `✅ *Booking Approved!*`
-      } else if (action === 'reject') {
-        newStatus = 'rejected'
-        responseText = `🚫 *Booking Rejected.*`
-      }
-
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', bookingId)
-
-      // 2. EDIT THE TELEGRAM MESSAGE (Remove buttons, show result)
-      if (!error) {
-        // Reconstruct the message to show final status
-        const originalText = query.message.text.split('──────────────')[0] // Keep original details
-        const finalMessage = `${originalText}\n──────────────\n${responseText}`
-
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: messageId,
-            text: finalMessage,
-            parse_mode: 'Markdown'
-          })
-        })
-      }
-
-      // 3. ANSWER QUERY (Stop the button loading animation)
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          callback_query_id: query.id,
-          text: error ? "Error updating database" : "Updated successfully"
-        })
-      })
+      await handleCallback(update.callback_query)
+    } else if (update.message && update.message.text) {
+      await handleMessage(update.message)
     }
+
   } catch (err) {
     console.error(err)
   }
 
   return new Response('OK', { status: 200 })
 })
+
+// ------------------------------------------------------------------
+// 📩 MESSAGE HANDLER (Text Inputs)
+// ------------------------------------------------------------------
+async function handleMessage(msg: any) {
+  const text = msg.text
+  const chatId = msg.chat.id
+
+  // --- COMMAND: /create_booking ---
+  if (text === '/create_booking') {
+    const keyboard = {
+      inline_keyboard: EVENT_TYPES.map(type => [{ text: type, callback_data: `new_evt_${type}` }])
+    }
+    await sendMessage(chatId, "🛠 <b>Create New Booking</b>\n\nStep 1: Select <b>Event Type</b>:", keyboard)
+    return
+  }
+
+  // --- COMMAND: /calendar ---
+  if (text === '/calendar') {
+    await handleCalendarCommand(chatId)
+    return
+  }
+
+  // --- WIZARD FLOW (REPLIES) ---
+  if (msg.reply_to_message) {
+    const replyText = msg.reply_to_message.text
+    
+    // 1. RECEIVE START DATE -> ASK END DATE MODE
+    if (replyText.includes("Reply with the START DATE")) {
+      if (!validateDate(text)) return sendError(chatId, "Invalid Date. Use YYYY-MM-DD.", msg.message_id)
+
+      const context = extractContext(replyText) // "Wedding|Chandan"
+      const [evt, team] = context.split('|')
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: "Same as Start Date", callback_data: `new_end_same_${evt}_${team}_${text}` }],
+          [{ text: "Select Different Date", callback_data: `new_end_diff_${evt}_${team}_${text}` }]
+        ]
+      }
+      await sendMessage(chatId, `Step 4: Select <b>End Date</b> logic:\n\n[CTX:${context}|${text}]`, keyboard)
+    }
+
+    // 2. RECEIVE MANUAL END DATE -> ASK NAME
+    else if (replyText.includes("Reply with the END DATE")) {
+      if (!validateDate(text)) return sendError(chatId, "Invalid Date. Use YYYY-MM-DD.", msg.message_id)
+      
+      const context = extractContext(replyText) // "Wedding|Chandan|2025-12-25"
+      // Context becomes: Event|Team|Start|End
+      askForName(chatId, `${context}|${text}`)
+    }
+
+    // 3. RECEIVE NAME -> ASK PHONE
+    else if (replyText.includes("Reply with CLIENT NAME")) {
+      const context = extractContext(replyText) // "Wedding|Chandan|2025-12-25|2025-12-25"
+      // Context becomes: Event|Team|Start|End|Name
+      askForPhone(chatId, `${context}|${text}`)
+    }
+
+    // 4. RECEIVE PHONE -> INSERT DB
+    else if (replyText.includes("Reply with CLIENT PHONE")) {
+      const context = extractContext(replyText) // "Wedding|Chandan|2025-12-25|2025-12-25|John Doe"
+      const [evt, team, start, end, name] = context.split('|')
+      const phone = text
+
+      // VALIDATE DATA BEFORE INSERT
+      if (!start || !name || !phone) {
+         return sendError(chatId, "Missing data. Please restart /create_booking", msg.message_id)
+      }
+
+      const { error } = await supabase.from('bookings').insert([{
+        client_name: name,
+        client_phone: phone,
+        booking_date: start,
+        booking_end_date: end,
+        event_type: evt,
+        assigned_to: team,
+        status: 'confirmed'
+      }])
+
+      if (error) {
+        await sendMessage(chatId, `❌ Database Error: ${error.message}`)
+      } else {
+        await sendMessage(chatId, `✅ <b>Booking Created Successfully!</b>\n\n👤 ${name}\n📞 ${phone}\n🗓 ${start} to ${end}\n📸 ${evt} (Assigned to ${team})`)
+      }
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+// 🖱 BUTTON HANDLER (Callbacks)
+// ------------------------------------------------------------------
+async function handleCallback(query: any) {
+  const data = query.data 
+  const chatId = query.message.chat.id
+  const msgId = query.message.message_id
+  
+  const parts = data.split('_')
+  const action = parts[0] 
+
+  // --- WIZARD FLOW ---
+  if (action === "new") {
+    const step = parts[1] // "evt", "team", "end"
+    
+    // Step 2: Event Selected -> Ask Team
+    if (step === "evt") {
+      const evtType = parts[2]
+      const teamButtons = TEAM_MEMBERS.map(m => [{ text: m.name, callback_data: `new_team_${evtType}_${m.id}` }])
+      await editMessage(chatId, msgId, `Event: ${evtType}\n\nStep 2: Assign <b>Team Member</b>:\n\n[CTX:${evtType}]`, { inline_keyboard: teamButtons })
+    }
+    
+    // Step 3: Team Selected -> Ask Start Date
+    else if (step === "team") {
+      const evtType = parts[2]
+      const teamId = parts.slice(3).join('_')
+      // Context: Event|Team
+      await sendMessage(chatId, `Event: ${evtType}\nTeam: ${teamId}\n\nStep 3: Reply with the <b>START DATE</b> (YYYY-MM-DD):\n\n[CTX:${evtType}|${teamId}]`, null, true)
+    }
+
+    // Step 4a: End Date SAME -> Ask Name
+    else if (step === "end" && parts[2] === "same") {
+       const [_, __, ___, evt, team, start] = parts
+       // Context: Event|Team|Start|Start
+       askForName(chatId, `${evt}|${team}|${start}|${start}`)
+    }
+
+    // Step 4b: End Date DIFF -> Ask End Date
+    else if (step === "end" && parts[2] === "diff") {
+       const [_, __, ___, evt, team, start] = parts
+       // Context: Event|Team|Start
+       await sendMessage(chatId, `Start: ${start}\n\nStep 4: Reply with the <b>END DATE</b> (YYYY-MM-DD):\n\n[CTX:${evt}|${team}|${start}]`, null, true)
+    }
+  }
+
+  // --- EXISTING LOGIC (Approve/Reject) ---
+  else if (action === 'menu') {
+      const bookingId = parts[1]
+      const teamButtons = TEAM_MEMBERS.map(m => ([{ text: `👤 Assign to ${m.name}`, callback_data: `set_${bookingId}_${m.id}` }]))
+      teamButtons.push([{ text: "🔙 Cancel", callback_data: `cancel_${bookingId}` }])
+      await editMessage(chatId, msgId, query.message.text, { inline_keyboard: teamButtons })
+  }
+  else if (action === 'set') {
+      const bookingId = parts[1]
+      const assignee = parts.slice(2).join('_')
+      await supabase.from('bookings').update({ status: 'confirmed', assigned_to: assignee }).eq('id', bookingId)
+      const originalText = query.message.text.split('\n\nSelect an action')[0]
+      await editMessage(chatId, msgId, `${originalText}\n\n✅ <b>CONFIRMED</b>\n📸 <b>Assigned to:</b> ${assignee}`, undefined)
+  }
+  else if (action === 'reject') {
+      const bookingId = parts[1]
+      await supabase.from('bookings').update({ status: 'rejected' }).eq('id', bookingId)
+      const originalText = query.message.text.split('\n\nSelect an action')[0]
+      await editMessage(chatId, msgId, `${originalText}\n\n🚫 <b>REJECTED</b>`, undefined)
+  }
+  else if (action === 'cancel') {
+     const bookingId = parts[1]
+     const keyboard = { inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `menu_${bookingId}` }, { text: "❌ Reject", callback_data: `reject_${bookingId}` } ]] }
+     await editMessage(chatId, msgId, query.message.text, keyboard)
+  }
+
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: query.id })
+  })
+}
+
+// ------------------------------------------------------------------
+// HELPERS & DATABASE TRIGGERS
+// ------------------------------------------------------------------
+
+async function handleDatabaseNotification(req: any) {
+    try {
+      const payload = await req.json()
+      const booking = payload.record 
+      if (!booking) return new Response('No record', { status: 400 })
+
+      const { data: clashData } = await supabase.from('bookings').select('client_name, assigned_to').eq('booking_date', booking.booking_date).eq('status', 'confirmed').maybeSingle()
+
+      let message = `<b>✨ NEW WEB ENQUIRY ✨</b>\n`
+      if (clashData) message += `\n🚨 <b>CLASH ALERT:</b> Booked for ${clashData.client_name} (${clashData.assigned_to})\n`
+      
+      message += `\n👤 <b>Client:</b> ${booking.client_name}`
+      message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
+      message += `\n🗓 <b>Date:</b> ${booking.booking_date}`
+      message += `\n\n<i>Select an action below:</i>`
+
+      const keyboard = {
+        inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `menu_${booking.id}` }, { text: "❌ Reject", callback_data: `reject_${booking.id}` } ]]
+      }
+
+      await sendMessage(CHAT_ID, message, keyboard)
+      return new Response('Notification Sent', { status: 200 })
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500 })
+    }
+}
+
+async function handleCalendarCommand(chatId: number) {
+    const today = new Date().toISOString().split('T')[0]
+    const { data: bookings } = await supabase
+        .from('bookings')
+        .select('booking_date, booking_end_date, client_name, assigned_to, event_type')
+        .eq('status', 'confirmed')
+        .gte('booking_date', today)
+        .order('booking_date', { ascending: true })
+        .limit(10)
+
+    let responseMsg = "<b>📅 UPCOMING SCHEDULE</b>\n\n"
+    if (!bookings || bookings.length === 0) responseMsg += "<i>No upcoming confirmed bookings.</i>"
+    else {
+        bookings.forEach(b => {
+            const assignee = b.assigned_to ? b.assigned_to : "Unassigned"
+            const endTxt = b.booking_end_date && b.booking_end_date !== b.booking_date ? ` ➝ ${b.booking_end_date}` : ""
+            const typeTxt = b.event_type ? `(${b.event_type})` : ""
+            responseMsg += `🗓 <code>${b.booking_date}${endTxt}</code>\n`
+            responseMsg += `👤 ${b.client_name} ${typeTxt} → <b>${assignee}</b>\n`
+            responseMsg += `──────────────\n`
+        })
+    }
+    await sendMessage(chatId, responseMsg)
+}
+
+function askForName(chatId: number, contextString: string) {
+    // Context: evt|team|start|end
+    sendMessage(chatId, `Step 5: Reply with <b>CLIENT NAME</b>:\n\n[CTX:${contextString}]`, null, true)
+}
+
+function askForPhone(chatId: number, contextString: string) {
+    // Context: evt|team|start|end|name
+    sendMessage(chatId, `Step 6: Reply with <b>PHONE NUMBER</b>:\n\n[CTX:${contextString}]`, null, true)
+}
+
+function validateDate(dateStr: string) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+}
+
+function extractContext(text: string) {
+    // We look for the hidden tag [CTX:...]
+    const match = text.match(/\[CTX:(.*?)\]/)
+    return match ? match[1] : ""
+}
+
+async function sendMessage(chatId: string | number, text: string, markup?: any, forceReply = false, replyToMsgId?: number) {
+    const body: any = { chat_id: chatId, text: text, parse_mode: 'HTML' }
+    if (markup) body.reply_markup = markup
+    if (forceReply) body.reply_markup = { force_reply: true, input_field_placeholder: "Type here..." }
+    if (replyToMsgId) body.reply_to_message_id = replyToMsgId
+
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+}
+
+async function sendError(chatId: number, text: string, replyToMsgId: number) {
+    await sendMessage(chatId, `⚠️ ${text}`, null, true, replyToMsgId)
+}
+
+async function editMessage(chatId: string | number, msgId: number, text: string, markup?: any) {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: text, parse_mode: 'HTML', reply_markup: markup })
+    })
+}

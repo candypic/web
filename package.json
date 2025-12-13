@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.87.1",
     "@tailwindcss/vite": "^4.1.18",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "framer-motion": "^12.23.26",
     "motion": "^12.23.26",
     "react": "^19.2.0",
@@ -22,7 +23,8 @@
     "react-scroll": "^1.9.3",
     "react-use-measure": "^2.1.7",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "vite-plugin-pwa": "^1.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
