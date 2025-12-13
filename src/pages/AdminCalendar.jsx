@@ -27,6 +27,12 @@ const AdminCalendar = () => {
 
   useEffect(() => {
     fetchBookings();
+    
+    // Request Notification Permission on load
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+    }
+
     const channel = supabase.channel('admin-calendar')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
         fetchBookings();
@@ -34,6 +40,21 @@ const AdminCalendar = () => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Check for events today and notify
+  useEffect(() => {
+    if (bookings.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const todaysEvents = bookings.filter(b => b.booking_date === todayStr && b.status === 'confirmed');
+        
+        if (todaysEvents.length > 0) {
+            new Notification('📅 Daily Schedule', {
+                body: `You have ${todaysEvents.length} event(s) today!`,
+                icon: '/logo.png'
+            });
+        }
+    }
+  }, [bookings]);
 
   // Calendar Math
   const monthStart = startOfMonth(currentDate);
@@ -64,7 +85,7 @@ const AdminCalendar = () => {
     setSelectedDate(day);
     // Reset form when opening, default endDate to selectedDate
     const dateStr = format(day, 'yyyy-MM-dd');
-    setFormData({ 
+    setFormData({
         clientName: '',
         clientPhone: '',
         endDate: dateStr,
@@ -77,7 +98,30 @@ const AdminCalendar = () => {
   // ---------------------------------------------
   // 📞 CONTACT PICKER API LOGIC
   // ---------------------------------------------
-  const handleSelectContacts = async () => {
+  // 1. Select CLIENT (Single)
+  const handleSelectClient = async () => {
+    if ('contacts' in navigator && 'select' in navigator.contacts) {
+      try {
+        const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+        if (contacts.length > 0) {
+          const contact = contacts[0];
+          setFormData(prev => ({
+            ...prev,
+            clientName: contact.name[0],
+            clientPhone: contact.tel[0]
+          }));
+        }
+      } catch (ex) {
+        console.error('Error selecting client:', ex);
+        alert('Contact picker failed.');
+      }
+    } else {
+      alert('Contact Picker API not supported.');
+    }
+  };
+
+  // 2. Select TEAM (Multiple)
+  const handleSelectTeam = async () => {
     if ('contacts' in navigator && 'select' in navigator.contacts) {
       try {
         const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
@@ -87,13 +131,10 @@ const AdminCalendar = () => {
             phone: contact.tel[0]
           }));
           
-          // Add all selected contacts to the 'assignedTo' list WITHOUT auto-filling main fields
           setFormData(prev => {
-            // Filter out duplicates based on phone number or name if phone is missing
             const newContacts = selectedContacts.filter(
                 sc => !prev.assignedTo.some(existing => existing.phone === sc.phone && existing.name === sc.name)
             );
-            
             return {
                 ...prev,
                 assignedTo: [...prev.assignedTo, ...newContacts]
@@ -101,11 +142,10 @@ const AdminCalendar = () => {
           });
         }
       } catch (ex) {
-        console.error('Error selecting contacts:', ex);
-        alert('Could not open contact picker. Make sure you are on a compatible device (like a mobile phone) and have granted permissions.');
+        console.error('Error selecting team:', ex);
       }
     } else {
-      alert('Contact Picker API is not supported on this browser or device.');
+      alert('Contact Picker API not supported.');
     }
   };
 
@@ -287,16 +327,22 @@ const AdminCalendar = () => {
                     {/* Client Name */}
                     <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
                         <FaUser className="text-gray-500 ml-1" />
-                        <input 
-                            type="text"
-                            placeholder="Client Name (Leave empty to Block)"
-                            value={formData.clientName}
-                            onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
-                        />
+                        <div className="flex-1 flex gap-2">
+                             <input
+                                type="text"
+                                placeholder="Client Name"
+                                value={formData.clientName}
+                                onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                                className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                            />
+                            {/* Client Picker Button */}
+                            <button onClick={handleSelectClient} className="text-brand-gold bg-white/10 p-1.5 rounded-md text-xs whitespace-nowrap">
+                                <FaAddressBook /> Pick
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Details Row */}
+                    {/* Phone & Contact Picker */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
                             <FaPhone className="text-gray-500 ml-1" />
@@ -312,10 +358,10 @@ const AdminCalendar = () => {
                         <div className="flex items-center gap-2 bg-brand-gold/10 p-2 rounded-lg border border-brand-gold/20">
                             <FaAddressBook className="text-brand-gold ml-1" />
                             <button
-                                onClick={handleSelectContacts}
+                                onClick={handleSelectTeam}
                                 className="bg-transparent border-none outline-none text-brand-gold text-sm w-full text-left font-semibold"
                             >
-                                Select Contact
+                                Select Team
                             </button>
                         </div>
                     </div>
