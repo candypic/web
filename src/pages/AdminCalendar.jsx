@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
-import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle, FaAddressBook, FaInfoCircle } from 'react-icons/fa';
 import BottomDrawer from '../components/BottomDrawer';
-
-// ---------------------------------------------
-// 👥 TEAM CONFIGURATION
-// ---------------------------------------------
-const TEAM_MEMBERS = ["Chandan"];
 
 const AdminCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -21,7 +16,8 @@ const AdminCalendar = () => {
     clientName: '',
     clientPhone: '',
     endDate: '',
-    assignedTo: ''
+    assignedTo: [],
+    additionalInfo: ''
   });
 
   const fetchBookings = async () => {
@@ -69,12 +65,44 @@ const AdminCalendar = () => {
     // Reset form when opening, default endDate to selectedDate
     const dateStr = format(day, 'yyyy-MM-dd');
     setFormData({ 
-        clientName: '', 
-        clientPhone: '', 
+        clientName: '',
+        clientPhone: '',
         endDate: dateStr,
-        assignedTo: '' 
+        assignedTo: [],
+        additionalInfo: ''
     });
     setIsDrawerOpen(true);
+  };
+
+  // ---------------------------------------------
+  // 📞 CONTACT PICKER API LOGIC
+  // ---------------------------------------------
+  const handleSelectContacts = async () => {
+    if ('contacts' in navigator && 'select' in navigator.contacts) {
+      try {
+        const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+        if (contacts.length > 0) {
+          const selectedContacts = contacts.map(contact => ({
+            name: contact.name[0],
+            phone: contact.tel[0]
+          }));
+          
+          // Auto-fill the first contact's info into the main fields
+          // And add all selected names to the 'assignedTo' list
+          setFormData(prev => ({
+            ...prev,
+            clientName: selectedContacts[0].name,
+            clientPhone: selectedContacts[0].phone,
+            assignedTo: [...new Set([...prev.assignedTo, ...selectedContacts.map(c => c.name)])] // Avoid duplicates
+          }));
+        }
+      } catch (ex) {
+        console.error('Error selecting contacts:', ex);
+        alert('Could not open contact picker. Make sure you are on a compatible device (like a mobile phone) and have granted permissions.');
+      }
+    } else {
+      alert('Contact Picker API is not supported on this browser or device.');
+    }
   };
 
   // ---------------------------------------------
@@ -86,16 +114,17 @@ const AdminCalendar = () => {
     try {
         const formattedStartDate = format(selectedDate, 'yyyy-MM-dd');
         // Logic: If name is empty, it's a BLOCK. If name exists, it's a BOOKING.
-        const isBlocking = !formData.clientName.trim(); 
+        const isBlocking = !formData.clientName.trim();
 
         const payload = {
             booking_date: formattedStartDate,
             status: isBlocking ? 'blocked' : 'confirmed',
-            type: isBlocking ? 'block' : 'manual_booking',
+            type: isBlocking ? 'block' : 'booking',
             
             client_name: isBlocking ? 'Date Blocked' : formData.clientName,
             client_phone: formData.clientPhone || null,
-            assigned_to: formData.assignedTo || null,
+            assigned_to: formData.assignedTo.length > 0 ? formData.assignedTo.join(', ') : null,
+            additional_info: formData.additionalInfo || null,
             // Only save end date if it's different from start date
             booking_end_date: formData.endDate !== formattedStartDate ? formData.endDate : null
         };
@@ -264,7 +293,7 @@ const AdminCalendar = () => {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
                             <FaPhone className="text-gray-500 ml-1" />
-                            <input 
+                            <input
                                 type="tel"
                                 placeholder="Phone"
                                 value={formData.clientPhone}
@@ -273,19 +302,42 @@ const AdminCalendar = () => {
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                            <FaUserTag className="text-gray-500 ml-1" />
-                            <select 
-                                value={formData.assignedTo}
-                                onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
-                                className="bg-transparent border-none outline-none text-white text-sm w-full appearance-none"
+                        <div className="flex items-center gap-2 bg-brand-gold/10 p-2 rounded-lg border border-brand-gold/20">
+                            <FaAddressBook className="text-brand-gold ml-1" />
+                            <button
+                                onClick={handleSelectContacts}
+                                className="bg-transparent border-none outline-none text-brand-gold text-sm w-full text-left font-semibold"
                             >
-                                <option value="" className="bg-black text-gray-500">Assign To...</option>
-                                {TEAM_MEMBERS.map(m => (
-                                    <option key={m} value={m} className="bg-black text-white">{m}</option>
-                                ))}
-                            </select>
+                                Select Contact
+                            </button>
                         </div>
+                    </div>
+
+                    {/* Assigned To Display */}
+                    {formData.assignedTo.length > 0 && (
+                      <div className="bg-black/20 p-2 rounded-lg border border-white/5">
+                          <label className="text-xs text-gray-400 flex items-center gap-2 mb-2">
+                              <FaUserTag /> Assigned
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                              {formData.assignedTo.map((name, index) => (
+                                  <span key={index} className="bg-white/10 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1">
+                                      {name}
+                                  </span>
+                              ))}
+                          </div>
+                      </div>
+                    )}
+                    
+                    {/* Additional Info */}
+                    <div className="flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                        <FaInfoCircle className="text-gray-500 ml-1 mt-1" />
+                        <textarea
+                            placeholder="Additional Info..."
+                            value={formData.additionalInfo}
+                            onChange={(e) => setFormData({...formData, additionalInfo: e.target.value})}
+                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600 h-16 resize-none"
+                        />
                     </div>
                     
                     {/* Action Button */}
