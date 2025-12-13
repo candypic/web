@@ -105,13 +105,17 @@ async function handleDatabaseNotification(req: Request) {
         message += `\n\n${icon} <b>Request:</b> ${eventType.replace('Custom Quote Request', 'Selected Items')}`
       }
 
-      message += `\n\n<i>Select an action below:</i>`
-
-      const keyboard = {
-        inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `menu_${booking.id}` }, { text: "❌ Reject", callback_data: `reject_${booking.id}` } ]]
+      // Only show action buttons if NO TEAM is assigned yet
+      if (!booking.assigned_to) {
+          message += `\n\n<i>Select an action below:</i>`
+          const keyboard = {
+            inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `menu_${booking.id}` }, { text: "❌ Reject", callback_data: `reject_${booking.id}` } ]]
+          }
+          await sendMessage(CHAT_ID, message, keyboard)
+      } else {
+          // If already assigned, just send the notification without buttons
+          await sendMessage(CHAT_ID, message)
       }
-
-      await sendMessage(CHAT_ID, message, keyboard)
       return new Response('Notification Sent', { status: 200 })
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
