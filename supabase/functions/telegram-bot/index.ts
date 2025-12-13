@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "std/http/server.ts"
+import { createClient } from '@supabase/supabase-js'
 
 const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const CHAT_ID = Deno.env.get('TELEGRAM_CHAT_ID')!
@@ -50,10 +50,10 @@ serve(async (req) => {
 // ------------------------------------------------------------------
 // 🔔 DATABASE NOTIFICATION HANDLER (Modified for Custom vs Full)
 // ------------------------------------------------------------------
-async function handleDatabaseNotification(req: any) {
+async function handleDatabaseNotification(req: Request) {
     try {
       const payload = await req.json()
-      const booking = payload.record 
+      const booking = payload.record
       if (!booking) return new Response('No record', { status: 400 })
 
       // Check Clashes
@@ -84,11 +84,26 @@ async function handleDatabaseNotification(req: any) {
       }
       
       message += `\n👤 <b>Client:</b> ${booking.client_name}`
-      message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
+      if (booking.client_phone) message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
       message += `\n🗓 <b>Date:</b> ${booking.booking_date}`
+      if (booking.booking_end_date && booking.booking_end_date !== booking.booking_date) {
+        message += ` to ${booking.booking_end_date}`
+      }
+
+      // Show Assigned To
+      if (booking.assigned_to) {
+          message += `\n\n📸 <b>Assigned Team:</b>\n${booking.assigned_to.split(', ').map((a: string) => `• ${a}`).join('\n')}`
+      }
+
+      // Show Additional Info
+      if (booking.additional_info) {
+          message += `\n\n📝 <b>Notes:</b>\n<i>${booking.additional_info}</i>`
+      }
       
       // Show specific details for Custom/Full
-      message += `\n${icon} <b>Request:</b> ${eventType.replace('Custom Quote Request', 'Selected Items')}`
+      if (eventType && eventType !== "General Inquiry") {
+        message += `\n\n${icon} <b>Request:</b> ${eventType.replace('Custom Quote Request', 'Selected Items')}`
+      }
 
       message += `\n\n<i>Select an action below:</i>`
 
@@ -99,14 +114,15 @@ async function handleDatabaseNotification(req: any) {
       await sendMessage(CHAT_ID, message, keyboard)
       return new Response('Notification Sent', { status: 200 })
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), { status: 500 })
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      return new Response(JSON.stringify({ error: errorMessage }), { status: 500 })
     }
 }
 
 // ------------------------------------------------------------------
 // 📩 MESSAGE HANDLER (Text Inputs)
 // ------------------------------------------------------------------
-async function handleMessage(msg: any) {
+async function handleMessage(msg: { text: string; chat: { id: number }; reply_to_message?: { text: string }; message_id: number }) {
   const text = msg.text
   const chatId = msg.chat.id
 
@@ -190,8 +206,8 @@ async function handleMessage(msg: any) {
 // ------------------------------------------------------------------
 // 🖱 BUTTON HANDLER (Callbacks)
 // ------------------------------------------------------------------
-async function handleCallback(query: any) {
-  const data = query.data 
+async function handleCallback(query: { id: string; data: string; message: { chat: { id: number }; message_id: number; text: string } }) {
+  const data = query.data
   const chatId = query.message.chat.id
   const msgId = query.message.message_id
   
@@ -299,8 +315,8 @@ function extractContext(text: string) {
     return match ? match[1] : ""
 }
 
-async function sendMessage(chatId: string | number, text: string, markup?: any, forceReply = false, replyToMsgId?: number) {
-    const body: any = { chat_id: chatId, text: text, parse_mode: 'HTML' }
+async function sendMessage(chatId: string | number, text: string, markup?: unknown, forceReply = false, replyToMsgId?: number) {
+    const body: Record<string, unknown> = { chat_id: chatId, text: text, parse_mode: 'HTML' }
     if (markup) body.reply_markup = markup
     if (forceReply) body.reply_markup = { force_reply: true, input_field_placeholder: "Type here..." }
     if (replyToMsgId) body.reply_to_message_id = replyToMsgId
@@ -316,7 +332,7 @@ async function sendError(chatId: number, text: string, replyToMsgId: number) {
     await sendMessage(chatId, `⚠️ ${text}`, null, true, replyToMsgId)
 }
 
-async function editMessage(chatId: string | number, msgId: number, text: string, markup?: any) {
+async function editMessage(chatId: string | number, msgId: number, text: string, markup?: unknown) {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
