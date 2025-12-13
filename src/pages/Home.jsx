@@ -1,4 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FaCalendarAlt, FaPhoneAlt, FaUser, FaEnvelope, FaCheckCircle, FaSpinner } from 'react-icons/fa';
+import { supabase } from '../lib/supabaseClient'; // Ensure this file exists
+import { generateGoogleCalendarLink, downloadICSFile } from '../utils/calendarUtils'; // Ensure this file exists
 
 import Hero from '../components/Hero';
 import About from '../components/About';
@@ -7,68 +11,92 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
 /* ----------------------- Calendar Component ----------------------- */
-const CalendarSection = () => {
-  const [selected, setSelected] = React.useState(null);
-
-  // Hardcoded blocked dates for now (replace with backend response)
-  const blockedDates = ["2025-12-20", "2025-12-23", "2025-12-27"];
-
+const CalendarSection = ({ onDateSelect, selectedDate, blockedDates = [] }) => {
   const today = new Date();
   const year = today.getFullYear();
-  const month = today.getMonth();
+  const month = today.getMonth(); 
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
 
-  // Generate dates list with ISO string
-  const dates = [...Array(daysInMonth)].map((_, i) => {
-    const d = new Date(year, month, i + 1);
-    const iso = d.toISOString().split("T")[0];
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-    return {
-      label: i + 1,
-      iso,
-      blocked: blockedDates.includes(iso),
-    };
-  });
+  // Generate Calendar Grid
+  // FIX: Used Array.from() to ensure the map function actually runs
+  const daysArray = [
+    ...Array(firstDayOfMonth).fill(null), 
+    ...Array.from({ length: daysInMonth }).map((_, i) => {
+      const day = i + 1;
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      // Fix 'isPast' to ensure today is clickable
+      const checkDate = new Date(iso);
+      const todayZero = new Date();
+      todayZero.setHours(0,0,0,0);
+      const isPast = checkDate < todayZero;
+      
+      const isBlocked = blockedDates.includes(iso);
+
+      return {
+        label: day,
+        iso,
+        blocked: isBlocked,
+        isPast: isPast
+      };
+    })
+  ];
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-6 md:p-8 shadow-lg mt-10">
-      <h3 className="text-xl font-serif text-white tracking-wide mb-6 text-center">
-        Select Your Date
-      </h3>
-
-      {/* Weekday Labels */}
-      <div className="grid grid-cols-7 gap-3 text-center text-gray-400 text-sm mb-4">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d}>{d}</div>
-        ))}
+    <div className="w-full">
+      <div className="flex justify-between items-end mb-6 px-2">
+        <h3 className="text-2xl font-serif text-white tracking-wide">
+          {monthNames[month]} {year}
+        </h3>
+        <span className="text-xs text-brand-gold uppercase tracking-widest opacity-80">Select a Date</span>
       </div>
 
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-3">
-        {dates.map((d) => (
-          <button
-            key={d.iso}
-            onClick={() => !d.blocked && setSelected(d.iso)}
-            className={`
-              py-3 rounded-lg text-sm font-medium transition-all
-              ${d.blocked
-                ? "bg-red-900/40 text-red-300 cursor-not-allowed opacity-50"
-                : "bg-white/5 text-white hover:bg-white/10 hover:scale-[1.05] active:scale-95"
-              }
-              ${selected === d.iso ? "bg-brand-red text-white scale-[1.1] shadow-lg" : ""}
-            `}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
+        <div className="grid grid-cols-7 gap-2 text-center mb-4">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+            <div key={d} className="text-brand-gold/60 text-xs font-bold uppercase tracking-wider">{d}</div>
+          ))}
+        </div>
 
-      {selected && (
-        <p className="text-center text-brand-gold mt-6 font-medium tracking-wide">
-          Selected Date: {selected}
-        </p>
-      )}
+        <div className="grid grid-cols-7 gap-2">
+          {daysArray.map((d, index) => {
+            // Render empty slots for layout alignment
+            if (!d) return <div key={`empty-${index}`} />;
+
+            return (
+              <button
+                key={d.iso}
+                disabled={d.blocked || d.isPast}
+                onClick={() => onDateSelect(d.iso)}
+                className={`
+                  aspect-square rounded-xl text-sm font-medium transition-all duration-300 relative group
+                  ${d.blocked
+                    ? "bg-white/5 text-gray-600 cursor-not-allowed border border-white/5" // Booked/Blocked
+                    : d.isPast 
+                        ? "text-gray-700 cursor-not-allowed" // Past
+                        : selectedDate === d.iso
+                            ? "bg-gradient-to-br from-brand-red to-red-600 text-white shadow-lg shadow-brand-red/40 scale-110 z-10" // Selected
+                            : "bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white hover:scale-105" // Available
+                  }
+                `}
+              >
+                {d.label}
+                {/* Booked Indicator */}
+                {d.blocked && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-gray-500 rounded-full"></div>}
+              </button>
+            );
+          })}
+        </div>
+        
+        <div className="flex gap-4 mt-6 text-xs text-gray-500 justify-center">
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-white/10"></div> Available</div>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-brand-red"></div> Selected</div>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-gray-600 border border-gray-500"></div> Booked</div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -76,6 +104,76 @@ const CalendarSection = () => {
 /* -------------------------- Home Page ----------------------------- */
 
 const Home = () => {
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [bookedDates, setBookedDates] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inquirySent, setInquirySent] = useState(false);
+
+  // 1. Fetch Confirmed Bookings from Supabase
+  useEffect(() => {
+    const fetchBookings = async () => {
+      // Fetch only 'confirmed' bookings to block them on calendar
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('booking_date')
+        .eq('status', 'confirmed');
+
+      if (data) {
+        setBookedDates(data.map(b => b.booking_date));
+      }
+    };
+
+    fetchBookings();
+
+    // Realtime Listener: Updates calendar if Admin confirms a booking elsewhere
+    const channel = supabase
+      .channel('bookings-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        fetchBookings();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // 2. Handle Form Submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    const formData = new FormData(e.target);
+    const name = formData.get('name');
+    const phone = formData.get('phone');
+    const email = formData.get('email');
+
+    // Insert into Supabase
+    const { error } = await supabase
+      .from('bookings')
+      .insert([{
+         client_name: name,
+         client_phone: phone,
+         booking_date: selectedDate,
+         status: 'pending' // Default status
+      }]);
+
+    setIsSubmitting(false);
+
+    if (error) {
+      alert("Something went wrong. Please try again.");
+      console.error(error);
+    } else {
+      setInquirySent(true);
+    }
+  };
+
+  // Helper for Calendar Buttons
+  const calendarEventData = {
+    title: `Photoshoot Inquiry: ${selectedDate}`,
+    start: selectedDate || '',
+    description: "Pending confirmation from Candy Pic Team.",
+    location: "Kumta, Karnataka"
+  };
+
   return (
     <div>
       <Navbar />
@@ -83,85 +181,149 @@ const Home = () => {
       <About />
       <Portfolio />
 
-      {/* -------- Contact Section with Calendar -------- */}
-      <div
-        id="contact"
-        className="relative py-28 px-4 bg-gradient-to-b from-black via-black to-brand-dark"
-      >
-        <div className="max-w-4xl mx-auto bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-8 md:p-14">
+      {/* -------- Contact Section -------- */}
+      <div id="contact" className="relative py-28 px-4 bg-[#050505] overflow-hidden">
+        
+        {/* Background Glows */}
+        <div className="absolute top-1/2 left-0 w-96 h-96 bg-brand-light/10 rounded-full blur-[120px] -translate-y-1/2 pointer-events-none"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-brand-red/5 rounded-full blur-[120px] pointer-events-none"></div>
 
-          {/* Heading */}
-          <div className="text-center mb-14">
-            <h2 className="text-5xl font-serif text-white tracking-wide mb-4">
-              Let’s Create Magic
-            </h2>
-            <p className="text-gray-400 text-lg max-w-md mx-auto">
-              Choose your date and share your details with us.
-            </p>
+        <div className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-12 lg:gap-20 items-start relative z-10">
+
+          {/* LEFT: Calendar Side */}
+          <div className="flex flex-col">
+            <div className="mb-10">
+                <h2 className="text-4xl md:text-5xl font-serif text-white mb-4 leading-tight">
+                  Secure Your <br/> <span className="text-brand-gold">Moment.</span>
+                </h2>
+                <p className="text-gray-400 text-lg font-light">
+                  Availability is limited. Select a date to check our team's schedule.
+                </p>
+            </div>
+            
+            <CalendarSection 
+                selectedDate={selectedDate} 
+                onDateSelect={(date) => {
+                    setSelectedDate(date);
+                    setInquirySent(false); // Reset form if date changes
+                }} 
+                blockedDates={bookedDates}
+            />
           </div>
 
-          {/* Calendar */}
-          <CalendarSection />
+          {/* RIGHT: Dynamic Form Side */}
+          <div className="relative min-h-[400px] flex items-center">
+            
+            {/* STATE 0: No Date Selected */}
+            {!selectedDate && (
+                <motion.div 
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="w-full border border-dashed border-white/10 rounded-3xl h-full flex flex-col items-center justify-center text-center p-10 bg-white/[0.02]"
+                >
+                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4 text-brand-gold">
+                        <FaCalendarAlt size={24} />
+                    </div>
+                    <h3 className="text-xl text-white font-serif mb-2">No Date Selected</h3>
+                    <p className="text-gray-500 text-sm">Please choose a date from the calendar to proceed.</p>
+                </motion.div>
+            )}
 
-          {/* ---- FORM ---- */}
-          <form className="space-y-8 mt-12">
+            {/* STATE 1: Date Selected (Form Active) */}
+            <AnimatePresence mode="wait">
+                {selectedDate && !inquirySent && (
+                    <motion.form 
+                        key="booking-form"
+                        onSubmit={handleSubmit}
+                        initial={{ opacity: 0, x: 50 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -50 }}
+                        className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl relative"
+                    >
+                        <div className="absolute -top-4 left-8 bg-brand-gold text-brand-dark px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg flex items-center gap-2">
+                             <FaCheckCircle /> {selectedDate}
+                        </div>
 
-            {/* First Row */}
-            <div className="grid sm:grid-cols-2 gap-8">
+                        <div className="space-y-6 mt-4">
+                            {/* Name */}
+                            <div className="group">
+                                <label className="text-xs text-brand-gold uppercase tracking-widest mb-2 block ml-1">Your Name</label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-red transition-colors">
+                                        <FaUser size={14} />
+                                    </div>
+                                    <input name="name" type="text" required placeholder="Full Name"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-4 text-white focus:border-brand-red focus:outline-none transition-all" />
+                                </div>
+                            </div>
 
-              <div className="group flex flex-col">
-                <label className="text-sm text-brand-gold mb-2 opacity-80 group-focus-within:opacity-100 transition-opacity">
-                  Your Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="John Doe"
-                  className="bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-gray-500 
-                             focus:border-brand-red/80 focus:shadow-[0_0_12px_rgba(255,0,0,0.35)] 
-                             focus:outline-none transition-all"
-                />
-              </div>
+                            {/* Phone */}
+                            <div className="group">
+                                <label className="text-xs text-brand-gold uppercase tracking-widest mb-2 block ml-1">Phone Number</label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-red transition-colors">
+                                        <FaPhoneAlt size={14} />
+                                    </div>
+                                    <input name="phone" type="tel" required placeholder="+91 98765 43210"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-4 text-white focus:border-brand-red focus:outline-none transition-all" />
+                                </div>
+                            </div>
 
-              <div className="group flex flex-col">
-                <label className="text-sm text-brand-gold mb-2 opacity-80 group-focus-within:opacity-100 transition-opacity">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  className="bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-gray-500 
-                             focus:border-brand-red/80 focus:shadow-[0_0_12px_rgba(255,0,0,0.35)] 
-                             focus:outline-none transition-all"
-                />
-              </div>
+                            {/* Email (Optional) */}
+                            <div className="group">
+                                <label className="text-xs text-brand-gold uppercase tracking-widest mb-2 block ml-1">Email <span className="text-gray-600 lowercase">(optional)</span></label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-red transition-colors">
+                                        <FaEnvelope size={14} />
+                                    </div>
+                                    <input name="email" type="email" placeholder="you@example.com"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-4 text-white focus:border-brand-red focus:outline-none transition-all" />
+                                </div>
+                            </div>
 
-            </div>
+                            <button
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-gradient-to-r from-brand-red to-[#c02b37] text-white font-bold rounded-xl shadow-lg hover:shadow-brand-red/40 transition-all uppercase tracking-wide flex justify-center items-center gap-2"
+                            >
+                                {isSubmitting ? <FaSpinner className="animate-spin" /> : 'Check Availability Now'}
+                            </button>
+                            
+                            <p className="text-center text-gray-400 text-xs mt-4 flex items-center justify-center gap-2">
+                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                Our team will be in touch within a few minutes.
+                            </p>
+                        </div>
+                    </motion.form>
+                )}
 
-            {/* Message */}
-            <div className="group flex flex-col">
-              <label className="text-sm text-brand-gold mb-2 opacity-80 group-focus-within:opacity-100 transition-opacity">
-                Message (Optional)
-              </label>
-              <textarea
-                rows="4"
-                placeholder="Tell us about your shoot, event, or idea..."
-                className="bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-gray-500
-                           focus:border-brand-red/80 focus:shadow-[0_0_12px_rgba(255,0,0,0.35)]
-                           focus:outline-none transition-all resize-none"
-              ></textarea>
-            </div>
+                {/* STATE 2: Success (Inquiry Sent) */}
+                {selectedDate && inquirySent && (
+                    <motion.div
+                        key="success-message"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="w-full bg-green-900/10 border border-green-500/30 rounded-3xl p-8 text-center"
+                    >
+                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FaCheckCircle className="text-3xl text-green-500" />
+                        </div>
+                        <h3 className="text-2xl text-white font-serif mb-2">Request Received!</h3>
+                        <p className="text-gray-400 text-sm mb-8">
+                            We have received your details for <strong>{selectedDate}</strong>.<br/>
+                            We will call you shortly to discuss the package.
+                        </p>
 
-            {/* Submit Button */}
-            <button
-              className="w-full py-4 bg-gradient-to-r from-brand-red to-red-700 text-white font-semibold 
-                         rounded-xl shadow-xl shadow-red-900/20 
-                         hover:shadow-red-900/30 hover:scale-[1.02] active:scale-[0.98]
-                         transition-all tracking-wide"
-            >
-              Send Inquiry
-            </button>
-
-          </form>
+                        
+                        
+                        <button 
+                            onClick={() => { setInquirySent(false); setSelectedDate(null); }}
+                            className="mt-6 text-xs text-gray-500 underline hover:text-white"
+                        >
+                            Start New Inquiry
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+          </div>
 
         </div>
       </div>
