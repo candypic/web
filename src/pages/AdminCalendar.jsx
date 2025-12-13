@@ -310,78 +310,82 @@ const AdminCalendar = () => {
             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                 <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold">Create Entry</h4>
                 
-                <div className="flex flex-col gap-3">
-                    {/* Range Selection */}
-                    <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                        <FaCalendarAlt className="text-gray-500 ml-1" />
-                        <span className="text-xs text-gray-400 mr-2">Till:</span>
-                        <input 
-                            type="date"
-                            value={formData.endDate}
-                            min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                            onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                            className="bg-transparent border-none outline-none text-white text-sm w-full [color-scheme:dark]"
-                        />
-                    </div>
-
-                    {/* Client Name */}
-                    <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                        <FaUser className="text-gray-500 ml-1" />
-                        <div className="flex-1 flex gap-2">
-                             <input
-                                type="text"
-                                placeholder="Client Name"
-                                value={formData.clientName}
-                                onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-                                className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                <div className="flex flex-col gap-4">
+                    
+                    {/* SECTION 1: EVENT & CLIENT */}
+                    <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex flex-col gap-3">
+                        <h5 className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Event & Client</h5>
+                        
+                        {/* Date Range */}
+                        <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                            <FaCalendarAlt className="text-gray-500 ml-1" />
+                            <span className="text-xs text-gray-400 mr-2">End Date:</span>
+                            <input
+                                type="date"
+                                value={formData.endDate}
+                                min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                                onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                                className="bg-transparent border-none outline-none text-white text-sm w-full [color-scheme:dark]"
                             />
-                            {/* Client Picker Button */}
-                            <button onClick={handleSelectClient} className="text-brand-gold bg-white/10 p-1.5 rounded-md text-xs whitespace-nowrap">
-                                <FaAddressBook /> Pick
-                            </button>
                         </div>
-                    </div>
 
-                    {/* Phone & Contact Picker */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                        {/* Client Name */}
+                        <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                            <FaUser className="text-gray-500 ml-1" />
+                            <div className="flex-1 flex gap-2">
+                                    <input
+                                    type="text"
+                                    placeholder="Client Name"
+                                    value={formData.clientName}
+                                    onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                                    className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                                />
+                                {/* Client Picker Button */}
+                                <button onClick={handleSelectClient} className="text-brand-gold bg-white/10 p-1.5 rounded-md text-xs whitespace-nowrap">
+                                    <FaAddressBook /> Pick
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Phone */}
+                        <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
                             <FaPhone className="text-gray-500 ml-1" />
                             <input
                                 type="tel"
-                                placeholder="Phone"
+                                placeholder="Phone Number"
                                 value={formData.clientPhone}
                                 onChange={(e) => setFormData({...formData, clientPhone: e.target.value})}
                                 className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
                             />
                         </div>
-
-                        <div className="flex items-center gap-2 bg-brand-gold/10 p-2 rounded-lg border border-brand-gold/20">
-                            <FaAddressBook className="text-brand-gold ml-1" />
-                            <button
-                                onClick={handleSelectTeam}
-                                className="bg-transparent border-none outline-none text-brand-gold text-sm w-full text-left font-semibold"
-                            >
-                                Select Team
-                            </button>
-                        </div>
                     </div>
 
-                    {/* Assigned To Display */}
-                    {formData.assignedTo.length > 0 && (
-                      <div className="bg-black/20 p-2 rounded-lg border border-white/5">
-                          <label className="text-xs text-gray-400 flex items-center gap-2 mb-2">
-                              <FaUserTag /> Assigned
-                          </label>
-                          <div className="flex flex-col gap-2">
-                              {formData.assignedTo.map((contact, index) => (
-                                  <div key={index} className="bg-white/10 text-white text-xs font-semibold px-3 py-2 rounded-lg flex justify-between items-center">
-                                      <span>{contact.name}</span>
-                                      <span className="text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded">{contact.phone}</span>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                    )}
+                    {/* SECTION 2: TEAM ASSIGNMENT */}
+                    <div className="bg-brand-gold/5 p-3 rounded-xl border border-brand-gold/10 flex flex-col gap-3">
+                        <div className="flex justify-between items-center">
+                            <h5 className="text-[10px] uppercase font-bold text-brand-gold tracking-wider">Team Assignment</h5>
+                            <button
+                                onClick={handleSelectTeam}
+                                className="text-xs bg-brand-gold/10 text-brand-gold px-2 py-1 rounded hover:bg-brand-gold/20 transition-colors flex items-center gap-1"
+                            >
+                                <FaAddressBook size={10} /> Select Team
+                            </button>
+                        </div>
+
+                        {/* Assigned To Display */}
+                        {formData.assignedTo.length > 0 ? (
+                            <div className="flex flex-col gap-2">
+                                {formData.assignedTo.map((contact, index) => (
+                                    <div key={index} className="bg-black/40 text-white text-xs font-semibold px-3 py-2 rounded-lg flex justify-between items-center border border-white/5">
+                                        <span>{contact.name}</span>
+                                        <span className="text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded text-[10px]">{contact.phone}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-gray-500 italic text-center py-2">No team members assigned yet.</p>
+                        )}
+                    </div>
                     
                     {/* Additional Info */}
                     <div className="flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
