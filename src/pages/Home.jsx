@@ -13,58 +13,100 @@ import Footer from '../components/Footer';
 /* ----------------------- Calendar Component ----------------------- */
 const CalendarSection = ({ onDateSelect, selectedDate, blockedDates = [] }) => {
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth(); 
 
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  // ⬇️ Month navigation state
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
 
-  // Generate Calendar Grid
-  // FIX: Used Array.from() to ensure the map function actually runs
+  const monthNames = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
+
+  // Prevent navigating to past months
+  const isCurrentMonth =
+    currentMonth === today.getMonth() && currentYear === today.getFullYear();
+
+  const goPrevMonth = () => {
+    if (isCurrentMonth) return;
+
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(y => y - 1);
+    } else {
+      setCurrentMonth(m => m - 1);
+    }
+  };
+
+  const goNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(y => y + 1);
+    } else {
+      setCurrentMonth(m => m + 1);
+    }
+  };
+
   const daysArray = [
-    ...Array(firstDayOfMonth).fill(null), 
+    ...Array(firstDayOfMonth).fill(null),
     ...Array.from({ length: daysInMonth }).map((_, i) => {
       const day = i + 1;
-      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      // Fix 'isPast' to ensure today is clickable
+      const iso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
       const checkDate = new Date(iso);
       const todayZero = new Date();
-      todayZero.setHours(0,0,0,0);
-      const isPast = checkDate < todayZero;
-      
-      const isBlocked = blockedDates.includes(iso);
+      todayZero.setHours(0, 0, 0, 0);
 
       return {
         label: day,
         iso,
-        blocked: isBlocked,
-        isPast: isPast
+        blocked: blockedDates.includes(iso),
+        isPast: checkDate < todayZero
       };
     })
   ];
 
   return (
     <div className="w-full">
-      <div className="flex justify-between items-end mb-6 px-2">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6 px-2">
+        <button
+          onClick={goPrevMonth}
+          disabled={isCurrentMonth}
+          className={`text-sm px-3 py-1 rounded-lg border border-white/10 
+            ${isCurrentMonth ? "opacity-30 cursor-not-allowed" : "hover:bg-white/10"}`}
+        >
+          ←
+        </button>
+
         <h3 className="text-2xl font-serif text-white tracking-wide">
-          {monthNames[month]} {year}
+          {monthNames[currentMonth]} {currentYear}
         </h3>
-        <span className="text-xs text-brand-gold uppercase tracking-widest opacity-80">Select a Date</span>
+
+        <button
+          onClick={goNextMonth}
+          className="text-sm px-3 py-1 rounded-lg border border-white/10 hover:bg-white/10"
+        >
+          →
+        </button>
       </div>
 
+      {/* Calendar */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
         <div className="grid grid-cols-7 gap-2 text-center mb-4">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div key={d} className="text-brand-gold/60 text-xs font-bold uppercase tracking-wider">{d}</div>
+          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+            <div key={d} className="text-brand-gold/60 text-xs font-bold uppercase">
+              {d}
+            </div>
           ))}
         </div>
 
         <div className="grid grid-cols-7 gap-2">
           {daysArray.map((d, index) => {
-            // Render empty slots for layout alignment
-            if (!d) return <div key={`empty-${index}`} />;
+            if (!d) return <div key={index} />;
 
             return (
               <button
@@ -72,34 +114,26 @@ const CalendarSection = ({ onDateSelect, selectedDate, blockedDates = [] }) => {
                 disabled={d.blocked || d.isPast}
                 onClick={() => onDateSelect(d.iso)}
                 className={`
-                  aspect-square rounded-xl text-sm font-medium transition-all duration-300 relative group
+                  aspect-square rounded-xl text-sm font-medium transition-all
                   ${d.blocked
-                    ? "bg-white/5 text-gray-600 cursor-not-allowed border border-white/5" // Booked/Blocked
-                    : d.isPast 
-                        ? "text-gray-700 cursor-not-allowed" // Past
-                        : selectedDate === d.iso
-                            ? "bg-gradient-to-br from-brand-red to-red-600 text-white shadow-lg shadow-brand-red/40 scale-110 z-10" // Selected
-                            : "bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white hover:scale-105" // Available
-                  }
+                    ? "bg-white/5 text-gray-600 cursor-not-allowed"
+                    : d.isPast
+                      ? "text-gray-700 cursor-not-allowed"
+                      : selectedDate === d.iso
+                        ? "bg-gradient-to-br from-brand-red to-red-600 text-white scale-110"
+                        : "bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"}
                 `}
               >
                 {d.label}
-                {/* Booked Indicator */}
-                {d.blocked && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-gray-500 rounded-full"></div>}
               </button>
             );
           })}
-        </div>
-        
-        <div className="flex gap-4 mt-6 text-xs text-gray-500 justify-center">
-            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-white/10"></div> Available</div>
-            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-brand-red"></div> Selected</div>
-            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-gray-600 border border-gray-500"></div> Booked</div>
         </div>
       </div>
     </div>
   );
 };
+
 
 /* -------------------------- Home Page ----------------------------- */
 
