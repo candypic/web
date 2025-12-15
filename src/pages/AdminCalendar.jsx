@@ -44,40 +44,50 @@ const AdminCalendar = () => {
 
   // --- 2. NOTIFICATION REGISTRATION ---
   // --- 2. NOTIFICATION REGISTRATION (Updated) ---
+  // --- 2. NOTIFICATION REGISTRATION (Debug Version) ---
   const handleEnableNotifications = async () => {
-    // 1. Get Name
     const name = prompt("Enter your Name (e.g. Rahul):");
     if (!name) return;
 
-    // 2. Get Phone (Crucial for linking)
     const phoneInput = prompt("Enter your Phone Number (e.g. 9876543210):");
     if (!phoneInput) return;
 
-    // Normalize phone (remove spaces, dashes, ensure +91 if needed, or just keep digits)
-    // For simplicity, let's strip non-digits:
     const cleanPhone = phoneInput.replace(/\D/g, ''); 
 
     try {
+        console.log("Requesting Token...");
         const token = await requestForToken();
-        if (token) {
-            const { error } = await supabase
-                .from('team_devices')
-                .upsert({ 
-                    name: name, 
-                    phone: cleanPhone, // Save the phone!
-                    push_token: token,
-                    last_active: new Date()
-                }, { onConflict: 'push_token' });
+        
+        if (!token) {
+            alert("Failed to get Token from Firebase. Check console for details.");
+            return;
+        }
 
-            if (error) throw error;
-            alert(`✅ Success! Notifications linked to ${cleanPhone}.`);
+        console.log("Got Token:", token);
+        console.log("Saving to Supabase...");
+
+        const { data, error } = await supabase
+            .from('team_devices')
+            .upsert({ 
+                name: name, 
+                phone: cleanPhone,
+                push_token: token,
+                last_active: new Date()
+            }, { onConflict: 'push_token' })
+            .select();
+
+        if (error) {
+            console.error("Supabase Error:", error);
+            alert(`Database Error: ${error.message}`);
+        } else {
+            console.log("Success Data:", data);
+            alert(`✅ Success! Device linked to ${cleanPhone}.`);
         }
     } catch (err) {
-        console.error(err);
-        alert("Failed to register. Check permissions.");
+        console.error("Unexpected Error:", err);
+        alert("An unexpected error occurred. See console.");
     }
   };
-
   // --- 3. CALENDAR MATH ---
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
