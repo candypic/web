@@ -203,7 +203,6 @@ const Quotation = () => {
                         <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
                             <li>Regular Photography 1 Album - (35 sheet)</li>
                             <li>Regular Videography (Pendrive)</li>
-                            <li>Haladi (2 Hours)</li>
                             <li>Cinematic Highlights</li>
                             <li>Candid Photos</li>
                          </ul>
