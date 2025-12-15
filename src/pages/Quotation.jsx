@@ -210,7 +210,7 @@ const Quotation = () => {
                     <div>
                         <h3 className="text-xl font-bold text-brand-gold mb-2">Haladi Coverage (2 hours)</h3>
                         <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
-                            <li>Photos and videos</li>
+                            <li>Regular Photos and videos</li>
                          </ul>
                     </div>
                     <div>
