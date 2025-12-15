@@ -2,9 +2,13 @@ import React from "react";
 import { motion } from "framer-motion";
 
 const photos = {
-  portrait: "/p3.jpg",  // tall image
-  wide1: "/p1.jpg",     // landscape 1
-  wide2: "/p2.jpg",     // landscape 2
+  portrait1: "/p3.jpg",
+  portrait2: "/p4.jpg",
+  portrait3: "/p5.jpg",
+  portrait4: "/p6.jpg",
+  wide1: "/p1.jpg",
+  wide2: "/p2.jpg",
+  wide3: "/p7.jpg",
 };
 
 const Portfolio = () => {
@@ -39,57 +43,54 @@ const Portfolio = () => {
           </motion.p>
         </div>
 
-        {/* FINAL LAYOUT */}
+        {/* GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-          {/* LEFT — Portrait Image */}
+          {/* LEFT — Portrait Stack */}
+          <div className="flex flex-col gap-6">
+            {[photos.portrait1, photos.portrait2, photos.portrait3].map((src, i) => (
+              <motion.div
+                key={src}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: i * 0.1 }}
+                className="relative overflow-hidden rounded-xl shadow-xl h-[420px]"
+              >
+                <img src={src} className="w-full h-full object-cover" alt={`portrait-${i}`} />
+              </motion.div>
+            ))}
+          </div>
+
+          {/* CENTER — Highlight Portrait */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6 }}
-            className="relative overflow-hidden rounded-xl shadow-xl md:col-span-1 h-[600px]"
+            className="relative overflow-hidden rounded-xl shadow-xl h-[660px]"
           >
             <img
-              src={photos.portrait}
+              src={photos.portrait4}
               className="w-full h-full object-cover"
-              alt="portrait"
+              alt="highlight portrait"
             />
           </motion.div>
 
-          {/* RIGHT — 2 Landscape Images */}
-          <div className="flex flex-col gap-6 md:col-span-2">
-
-            {/* Wide 1 */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="relative overflow-hidden rounded-xl shadow-xl h-[290px]"
-            >
-              <img
-                src={photos.wide1}
-                className="w-full h-full object-cover"
-                alt="wide1"
-              />
-            </motion.div>
-
-            {/* Wide 2 */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="relative overflow-hidden rounded-xl shadow-xl h-[290px]"
-            >
-              <img
-                src={photos.wide2}
-                className="w-full h-full object-cover"
-                alt="wide2"
-              />
-            </motion.div>
-
+          {/* RIGHT — Wide Stack */}
+          <div className="flex flex-col gap-6">
+            {[photos.wide1, photos.wide2, photos.wide3].map((src, i) => (
+              <motion.div
+                key={src}
+                initial={{ opacity: 0, x: 40 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: i * 0.1 }}
+                className="relative overflow-hidden rounded-xl shadow-xl h-[240px]"
+              >
+                <img src={src} className="w-full h-full object-cover" alt={`wide-${i}`} />
+              </motion.div>
+            ))}
           </div>
-        </div>
 
+        </div>
       </div>
     </div>
   );
