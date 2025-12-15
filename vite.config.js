@@ -14,7 +14,7 @@ export default defineConfig({
       devOptions: {
         enabled: true // Enables PWA for localhost/development
       },
-      includeAssets: ['logo.png', 'robots.txt'], // Ensure these files are in your /public folder
+      includeAssets: ['logo-square-black.jpg', 'robots.txt'], // Ensure these files are in your /public folder
       manifest: {
         name: 'Candy Pic Admin',
         short_name: 'CandyAdmin',
@@ -26,12 +26,12 @@ export default defineConfig({
         start_url: '/calendar', // Tries to open directly to calendar
         icons: [
           {
-            src: '/logo.png', // Ensure you have this image in /public
+            src: '/logo-square-black.jpg', // Ensure you have this image in /public
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/logo.png', 
+            src: '/logo-square-black.jpg', 
             sizes: '512x512',
             type: 'image/png'
           }

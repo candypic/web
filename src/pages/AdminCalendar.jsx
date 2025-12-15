@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
-import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle, FaAddressBook, FaInfoCircle } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle, FaInfoCircle, FaBell } from 'react-icons/fa';
 import BottomDrawer from '../components/BottomDrawer';
+import { requestForToken } from '../lib/firebase'; // Ensure you created this file in previous steps
+
+// ---------------------------------------------
+// 👥 TEAM CONFIGURATION
+// ---------------------------------------------
+const TEAM_MEMBERS = ["Chandan", "Rahul", "Prajna", "Team B"];
 
 const AdminCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -16,10 +22,11 @@ const AdminCalendar = () => {
     clientName: '',
     clientPhone: '',
     endDate: '',
-    assignedTo: [],
+    assignedTo: '',
     additionalInfo: ''
   });
 
+  // --- 1. FETCH DATA ---
   const fetchBookings = async () => {
     const { data } = await supabase.from('bookings').select('*');
     if (data) setBookings(data);
@@ -27,12 +34,6 @@ const AdminCalendar = () => {
 
   useEffect(() => {
     fetchBookings();
-    
-    // Request Notification Permission on load
-    if ('Notification' in window && Notification.permission !== 'granted') {
-        Notification.requestPermission();
-    }
-
     const channel = supabase.channel('admin-calendar')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
         fetchBookings();
@@ -41,22 +42,43 @@ const AdminCalendar = () => {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Check for events today and notify
-  useEffect(() => {
-    if (bookings.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const todaysEvents = bookings.filter(b => b.booking_date === todayStr && b.status === 'confirmed');
-        
-        if (todaysEvents.length > 0) {
-            new Notification('📅 Daily Schedule', {
-                body: `You have ${todaysEvents.length} event(s) today!`,
-                icon: '/logo.png'
-            });
-        }
-    }
-  }, [bookings]);
+  // --- 2. NOTIFICATION REGISTRATION ---
+  // --- 2. NOTIFICATION REGISTRATION (Updated) ---
+  const handleEnableNotifications = async () => {
+    // 1. Get Name
+    const name = prompt("Enter your Name (e.g. Rahul):");
+    if (!name) return;
 
-  // Calendar Math
+    // 2. Get Phone (Crucial for linking)
+    const phoneInput = prompt("Enter your Phone Number (e.g. 9876543210):");
+    if (!phoneInput) return;
+
+    // Normalize phone (remove spaces, dashes, ensure +91 if needed, or just keep digits)
+    // For simplicity, let's strip non-digits:
+    const cleanPhone = phoneInput.replace(/\D/g, ''); 
+
+    try {
+        const token = await requestForToken();
+        if (token) {
+            const { error } = await supabase
+                .from('team_devices')
+                .upsert({ 
+                    name: name, 
+                    phone: cleanPhone, // Save the phone!
+                    push_token: token,
+                    last_active: new Date()
+                }, { onConflict: 'push_token' });
+
+            if (error) throw error;
+            alert(`✅ Success! Notifications linked to ${cleanPhone}.`);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Failed to register. Check permissions.");
+    }
+  };
+
+  // --- 3. CALENDAR MATH ---
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart);
@@ -83,94 +105,35 @@ const AdminCalendar = () => {
 
   const handleDateClick = (day) => {
     setSelectedDate(day);
-    // Reset form when opening, default endDate to selectedDate
+    // Reset form, default endDate is selected date
     const dateStr = format(day, 'yyyy-MM-dd');
-    setFormData({
-        clientName: '',
-        clientPhone: '',
+    setFormData({ 
+        clientName: '', 
+        clientPhone: '', 
         endDate: dateStr,
-        assignedTo: [],
+        assignedTo: '',
         additionalInfo: ''
     });
     setIsDrawerOpen(true);
   };
 
-  // ---------------------------------------------
-  // 📞 CONTACT PICKER API LOGIC
-  // ---------------------------------------------
-  // 1. Select CLIENT (Single)
-  const handleSelectClient = async () => {
-    if ('contacts' in navigator && 'select' in navigator.contacts) {
-      try {
-        const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
-        if (contacts.length > 0) {
-          const contact = contacts[0];
-          setFormData(prev => ({
-            ...prev,
-            clientName: contact.name[0],
-            clientPhone: contact.tel[0]
-          }));
-        }
-      } catch (ex) {
-        console.error('Error selecting client:', ex);
-        alert('Contact picker failed.');
-      }
-    } else {
-      alert('Contact Picker API not supported.');
-    }
-  };
-
-  // 2. Select TEAM (Multiple)
-  const handleSelectTeam = async () => {
-    if ('contacts' in navigator && 'select' in navigator.contacts) {
-      try {
-        const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
-        if (contacts.length > 0) {
-          const selectedContacts = contacts.map(contact => ({
-            name: contact.name[0],
-            phone: contact.tel[0]
-          }));
-          
-          setFormData(prev => {
-            const newContacts = selectedContacts.filter(
-                sc => !prev.assignedTo.some(existing => existing.phone === sc.phone && existing.name === sc.name)
-            );
-            return {
-                ...prev,
-                assignedTo: [...prev.assignedTo, ...newContacts]
-            };
-          });
-        }
-      } catch (ex) {
-        console.error('Error selecting team:', ex);
-      }
-    } else {
-      alert('Contact Picker API not supported.');
-    }
-  };
-
-  // ---------------------------------------------
-  // ⚡ CREATE BOOKING / BLOCK LOGIC
-  // ---------------------------------------------
+  // --- 4. CREATE ENTRY LOGIC ---
   const handleCreateEntry = async () => {
     if (!selectedDate) return;
     setIsLoading(true);
     try {
         const formattedStartDate = format(selectedDate, 'yyyy-MM-dd');
         // Logic: If name is empty, it's a BLOCK. If name exists, it's a BOOKING.
-        const isBlocking = !formData.clientName.trim();
+        const isBlocking = !formData.clientName.trim(); 
 
         const payload = {
             booking_date: formattedStartDate,
             status: isBlocking ? 'blocked' : 'confirmed',
-            type: isBlocking ? 'block' : 'booking',
+            event_type: isBlocking ? 'Block' : 'Manual Booking',
             
             client_name: isBlocking ? 'Date Blocked' : formData.clientName,
             client_phone: formData.clientPhone || null,
-            // Format: "Name (Phone), Name (Phone)"
-            assigned_to: formData.assignedTo.length > 0
-                ? formData.assignedTo.map(c => `${c.name} (${c.phone})`).join(', ')
-                : null,
+            assigned_to: formData.assignedTo || null,
             additional_info: formData.additionalInfo || null,
             // Only save end date if it's different from start date
             booking_end_date: formData.endDate !== formattedStartDate ? formData.endDate : null
@@ -208,14 +171,20 @@ const AdminCalendar = () => {
     <div className="fixed inset-0 h-[100dvh] w-full bg-[#0b262d] text-white flex flex-col overflow-hidden font-sans">
       
       {/* --- HEADER --- */}
-      <div className="pt-6 pb-4 px-6 flex justify-between items-center bg-[#0b262d] z-10 shadow-xl shadow-[#091f25]">
+      <div className="pt-6 pb-4 px-4 flex justify-between items-center bg-[#0b262d] z-10 shadow-xl shadow-[#091f25]">
         <div>
-            <h1 className="text-2xl font-serif text-white tracking-wide">
+            <h1 className="text-xl font-serif text-white tracking-wide">
                 {format(currentDate, 'MMMM')}
             </h1>
-            <p className="text-brand-gold text-sm uppercase tracking-[0.2em] opacity-80">
-                {format(currentDate, 'yyyy')}
-            </p>
+            <div className="flex items-center gap-2">
+                <p className="text-brand-gold text-xs uppercase tracking-[0.2em] opacity-80">
+                    {format(currentDate, 'yyyy')}
+                </p>
+                {/* Notification Button */}
+                <button onClick={handleEnableNotifications} className="bg-white/10 p-1 rounded-full text-brand-gold hover:bg-white/20">
+                    <FaBell size={10} />
+                </button>
+            </div>
         </div>
         
         <div className="flex gap-2">
@@ -246,8 +215,8 @@ const AdminCalendar = () => {
                 const dayEvents = getEventsForDay(day);
                 
                 // Logic for styling
-                const isBlocked = dayEvents.some(ev => ev.type === 'block' || ev.status === 'blocked');
-                const activeBookings = dayEvents.filter(ev => ev.type !== 'block' && ev.status !== 'blocked');
+                const isBlocked = dayEvents.some(ev => ev.event_type === 'Block' || ev.status === 'blocked');
+                const activeBookings = dayEvents.filter(ev => ev.event_type !== 'Block' && ev.status !== 'blocked');
                 const hasBooking = activeBookings.length > 0;
                 
                 let bgClass = "bg-white/[0.02]";
@@ -308,51 +277,44 @@ const AdminCalendar = () => {
             
             {/* 1. CREATION FORM */}
             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold">Create Entry</h4>
+                <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold">Manage Date</h4>
                 
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3">
                     
-                    {/* SECTION 1: EVENT & CLIENT */}
-                    <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex flex-col gap-3">
-                        <h5 className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Event & Client</h5>
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                        <FaCalendarAlt className="text-gray-500 ml-1" />
+                        <span className="text-xs text-gray-400 mr-2">Till When?</span>
+                        <input 
+                            type="date"
+                            value={formData.endDate}
+                            min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                            onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                            className="bg-transparent border-none outline-none text-white text-sm w-full [color-scheme:dark]"
+                        />
+                    </div>
+
+                    {/* Team & Phone Row */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                            <FaUserTag className="text-gray-500 ml-1" />
+                            <select 
+                                value={formData.assignedTo}
+                                onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
+                                className="bg-transparent border-none outline-none text-white text-sm w-full appearance-none"
+                            >
+                                <option value="" className="bg-black text-gray-500">Assign To...</option>
+                                {TEAM_MEMBERS.map(m => (
+                                    <option key={m} value={m} className="bg-black text-white">{m}</option>
+                                ))}
+                            </select>
+                        </div>
                         
-                        {/* Date Range */}
-                        <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
-                            <FaCalendarAlt className="text-gray-500 ml-1" />
-                            <span className="text-xs text-gray-400 mr-2">End Date:</span>
-                            <input
-                                type="date"
-                                value={formData.endDate}
-                                min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                                onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                                className="bg-transparent border-none outline-none text-white text-sm w-full [color-scheme:dark]"
-                            />
-                        </div>
-
-                        {/* Client Name */}
-                        <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
-                            <FaUser className="text-gray-500 ml-1" />
-                            <div className="flex-1 flex gap-2">
-                                    <input
-                                    type="text"
-                                    placeholder="Client Name"
-                                    value={formData.clientName}
-                                    onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-                                    className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
-                                />
-                                {/* Client Picker Button */}
-                                <button onClick={handleSelectClient} className="text-brand-gold bg-white/10 p-1.5 rounded-md text-xs whitespace-nowrap">
-                                    <FaAddressBook /> Pick
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Phone */}
-                        <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
                             <FaPhone className="text-gray-500 ml-1" />
-                            <input
+                            <input 
                                 type="tel"
-                                placeholder="Phone Number"
+                                placeholder="Phone"
                                 value={formData.clientPhone}
                                 onChange={(e) => setFormData({...formData, clientPhone: e.target.value})}
                                 className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
@@ -360,33 +322,18 @@ const AdminCalendar = () => {
                         </div>
                     </div>
 
-                    {/* SECTION 2: TEAM ASSIGNMENT */}
-                    <div className="bg-brand-gold/5 p-3 rounded-xl border border-brand-gold/10 flex flex-col gap-3">
-                        <div className="flex justify-between items-center">
-                            <h5 className="text-[10px] uppercase font-bold text-brand-gold tracking-wider">Team Assignment</h5>
-                            <button
-                                onClick={handleSelectTeam}
-                                className="text-xs bg-brand-gold/10 text-brand-gold px-2 py-1 rounded hover:bg-brand-gold/20 transition-colors flex items-center gap-1"
-                            >
-                                <FaAddressBook size={10} /> Select Team
-                            </button>
-                        </div>
-
-                        {/* Assigned To Display */}
-                        {formData.assignedTo.length > 0 ? (
-                            <div className="flex flex-col gap-2">
-                                {formData.assignedTo.map((contact, index) => (
-                                    <div key={index} className="bg-black/40 text-white text-xs font-semibold px-3 py-2 rounded-lg flex justify-between items-center border border-white/5">
-                                        <span>{contact.name}</span>
-                                        <span className="text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded text-[10px]">{contact.phone}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-xs text-gray-500 italic text-center py-2">No team members assigned yet.</p>
-                        )}
+                    {/* Client Name (Logic Trigger) */}
+                    <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                        <FaUser className="text-gray-500 ml-1" />
+                        <input 
+                            type="text"
+                            placeholder="Client Name (Leave Empty to BLOCK)"
+                            value={formData.clientName}
+                            onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                        />
                     </div>
-                    
+
                     {/* Additional Info */}
                     <div className="flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
                         <FaInfoCircle className="text-gray-500 ml-1 mt-1" />
@@ -394,7 +341,7 @@ const AdminCalendar = () => {
                             placeholder="Additional Info..."
                             value={formData.additionalInfo}
                             onChange={(e) => setFormData({...formData, additionalInfo: e.target.value})}
-                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600 h-16 resize-none"
+                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600 h-10 resize-none pt-1"
                         />
                     </div>
                     
@@ -403,27 +350,27 @@ const AdminCalendar = () => {
                         onClick={handleCreateEntry}
                         disabled={isLoading}
                         className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]
-                            ${!formData.clientName 
+                            ${!formData.clientName.trim() 
                                 ? 'bg-red-500/10 text-red-400 border border-red-500/30' // Block Style
                                 : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'} // Booking Style
                         `}
                     >
                         {isLoading ? 'Processing...' : (
-                            !formData.clientName 
-                                ? <><FaBan /> Block Date Range</> 
+                            !formData.clientName.trim()
+                                ? <><FaBan /> Block Date</> 
                                 : <><FaCheckCircle /> Create Booking</>
                         )}
                     </button>
                 </div>
             </div>
 
-            {/* 2. EXISTING EVENTS */}
+            {/* 2. EXISTING EVENTS LIST */}
             {eventsOnSelectedDate.length > 0 && (
                 <div>
-                    <h4 className="text-xs uppercase tracking-widest text-gray-500 mb-3 font-bold px-1">Events on this day</h4>
+                    <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold px-1">Events on this day</h4>
                     <div className="space-y-3">
                         {eventsOnSelectedDate.map(ev => {
-                            const isBlock = ev.type === 'block' || ev.status === 'blocked';
+                            const isBlock = ev.event_type === 'Block' || ev.status === 'blocked';
                             return (
                                 <div key={ev.id} className={`
                                     relative p-4 rounded-xl border flex justify-between items-start
@@ -446,7 +393,7 @@ const AdminCalendar = () => {
                                             {!isBlock && (
                                                 <div className="text-xs text-gray-400 mt-1 flex flex-col gap-0.5">
                                                     {ev.client_phone && <span>📞 {ev.client_phone}</span>}
-                                                    {ev.assigned_to && <span>📸 {ev.assigned_to}</span>}
+                                                    {ev.assigned_to && <span>📸 Assigned: {ev.assigned_to}</span>}
                                                 </div>
                                             )}
                                         </div>
