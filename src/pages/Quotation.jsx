@@ -231,10 +231,7 @@ const Quotation = () => {
                         <h3 className="text-xl font-bold text-brand-gold mb-2">Bonus Services</h3>
                         <div className="grid grid-cols-1 gap-2 text-sm text-gray-300">
                             <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> LED wall (6 x 8)</div>
-                            <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> Haladi (2 Hours)</div>
-                            <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> Cinematic Highlights</div>
-                            <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> Candid Photos</div>
-                        </div>
+                            </div>
                     </div>
                 </div>
 
