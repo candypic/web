@@ -13,19 +13,25 @@ const BookingModal = ({ isOpen, onClose, packageDetails }) => {
         e.preventDefault();
         setLoading(true);
 
-        // Format the "Event Type" to include package details
-        // e.g. "Full Package" OR "Custom: Photo, Video, Drone"
-        let eventDescription = packageDetails.type;
-        if (packageDetails.items && packageDetails.items.length > 0) {
-            eventDescription += ` (${packageDetails.items.join(', ')})`;
-        }
+        const { type, items, total } = packageDetails;
+        const isCustom = type === 'Custom Quote Request';
+
+        const eventDescription = isCustom ?
+            `Custom Quote Request (Total: ₹${total.toLocaleString()})` :
+            type;
+            
+        const additionalInfo = isCustom && items && items.length > 0 ?
+            items.map(i => `• ${i.name} (₹${i.price.toLocaleString()})`).join('\n') :
+            null;
+
 
         const { error } = await supabase.from('bookings').insert([{
             client_name: formData.name,
             client_phone: formData.phone,
             booking_date: formData.date,
-            event_type: eventDescription, // Stores the package info
-            status: 'pending'
+            event_type: eventDescription,
+            status: 'pending',
+            additional_info: additionalInfo,
         }]);
 
         setLoading(false);
@@ -98,14 +104,14 @@ const Quotation = () => {
   const [selectedPackage, setSelectedPackage] = useState({ type: '', items: [] });
 
   const [customItems, setCustomItems] = useState([
-    { id: 1, name: 'Wedding Day Photography', category: 'Main', checked: false },
-    { id: 2, name: 'Wedding Day Videography', category: 'Main', checked: false },
-    { id: 3, name: 'Pre-Wedding Shoot', category: 'Main', checked: false },
-    { id: 4, name: 'Engagement Coverage', category: 'Main', checked: false },
-    { id: 5, name: 'Haladi Ceremony', category: 'Add-on', checked: false },
-    { id: 6, name: 'Cinematic Highlights', category: 'Add-on', checked: false },
-    { id: 7, name: 'Candid Photography', category: 'Add-on', checked: false },
-    { id: 8, name: 'Drone Coverage', category: 'Add-on', checked: false },
+    { id: 1, name: 'Wedding Day Photography & Videography', price: 45000, category: 'Main', checked: false },
+    { id: 2, name: 'Pre-Wedding Photography', price: 35000, category: 'Main', checked: false },
+    { id: 3, name: 'Engagement Coverage', price: 25000, category: 'Main', checked: false },
+    { id: 4, name: 'Haldi Ceremony', price: 15000, category: 'Add-on', checked: false },
+    { id: 5, name: 'Cinematic Highlights', price: 17000, category: 'Add-on', checked: false },
+    { id: 6, name: 'Candid Photography', price: 17000, category: 'Add-on', checked: false },
+    { id: 7, name: 'Drone Coverage', price: 10000, category: 'Add-on', checked: false },
+    { id: 8, name: 'LED Wall', price: 15000, category: 'Add-on', checked: false },
   ]);
 
   const toggleCustomItem = (id) => {
@@ -122,19 +128,28 @@ const Quotation = () => {
 
   // Handler for "Custom Inquiry"
   const handleCustomSubmit = () => {
-    const selectedServices = customItems.filter(item => item.checked).map(i => i.name);
-    
+    const selectedServices = customItems.filter(item => item.checked);
+    const total = selectedServices.reduce((sum, item) => sum + item.price, 0);
+
     if (selectedServices.length === 0) {
         alert("Please select at least one service.");
         return;
     }
     
-    setSelectedPackage({ type: 'Custom Quote Request', items: selectedServices });
+    setSelectedPackage({
+        type: 'Custom Quote Request',
+        items: selectedServices,
+        total: total
+    });
     setModalOpen(true);
   };
 
   const containerVariants = { show: { transition: { staggerChildren: 0.1 } } };
   const itemVariants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
+
+  // Total calculation
+  const selectedItems = customItems.filter(item => item.checked);
+  const totalAmount = selectedItems.reduce((sum, item) => sum + item.price, 0);
 
   return (
     <div className="min-h-screen bg-brand-dark pt-28 pb-12 px-4 md:px-12 text-white relative overflow-hidden">
@@ -186,27 +201,36 @@ const Quotation = () => {
                     <div>
                         <h3 className="text-xl font-bold text-brand-gold mb-2">Wedding Day Coverage</h3>
                         <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
-                            <li>Regular Photography (1 Album)</li>
+                            <li>Regular Photography 1 Album - (35 sheet)</li>
                             <li>Regular Videography (Pendrive)</li>
-                        </ul>
+                            <li>Haladi (2 Hours)</li>
+                            <li>Cinematic Highlights</li>
+                            <li>Candid Photos</li>
+                         </ul>
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold text-brand-gold mb-2">Haladi Coverage (2 hours)</h3>
+                        <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
+                            <li>Photos and videos</li>
+                         </ul>
                     </div>
                     <div>
                         <h3 className="text-xl font-bold text-brand-gold mb-2">Engagement</h3>
+                        <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
+                            <li>Highlights and photos (soft copy)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold text-brand-gold mb-2">Pre-Wedding Package</h3>
                         <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
                             <li>2-3 Minute Video & 100 Edited Photos</li>
                             <li>Drone Coverage & Save the Date Video (30s)</li>
                         </ul>
                     </div>
                     <div>
-                        <h3 className="text-xl font-bold text-brand-gold mb-2">Pre-Wedding Package</h3>
-                        <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside marker:text-brand-red">
-                            <li>2 Sections (Sets/Looks)</li>
-                            <li>Drone Coverage & Save the Date Video</li>
-                        </ul>
-                    </div>
-                    <div>
                         <h3 className="text-xl font-bold text-brand-gold mb-2">Bonus Services</h3>
                         <div className="grid grid-cols-1 gap-2 text-sm text-gray-300">
+                            <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> LED wall (6 x 8)</div>
                             <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> Haladi (2 Hours)</div>
                             <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> Cinematic Highlights</div>
                             <div className="flex items-center gap-2"><FaCheck className="text-brand-red text-xs"/> Candid Photos</div>
@@ -227,13 +251,12 @@ const Quotation = () => {
                             Book Full Package
                         </button>
                         <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                            *Payment Terms: ₹15,000 Advance, ₹1.05L on Wedding Day, Balance on Delivery.
+                            *Payment Terms: <strong>₹15,000 Advance for booking</strong>, ₹1.05L on Wedding Day, Balance on Delivery.
                         </p>
                     </div>
                 </div>
             </div>
         </motion.div>
-
 
         {/* ================= SECTION 2: CUSTOM BUILDER ================= */}
         <div id="custom-builder" className="pt-12 pb-20">
@@ -273,7 +296,10 @@ const Quotation = () => {
                             </div>
                             
                             <div>
-                                <h4 className={`font-medium text-lg ${item.checked ? 'text-white' : 'text-gray-400'}`}>{item.name}</h4>
+                                <h4 className={`font-medium text-lg ${item.checked ? 'text-white' : 'text-gray-400'}`}>
+                                  {item.name}
+                                </h4>
+                                <p className="text-xs text-gray-400">₹{item.price.toLocaleString()}</p>
                                 <span className="text-[10px] uppercase tracking-widest text-brand-gold/70">{item.category}</span>
                             </div>
                         </motion.div>
@@ -285,26 +311,41 @@ const Quotation = () => {
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-md">
                         <h3 className="text-white font-serif text-xl mb-6">Your Selection</h3>
                         
-                        <div className="min-h-[150px] mb-6">
-                            {customItems.filter(i => i.checked).length === 0 ? (
-                                <p className="text-gray-500 italic text-sm text-center mt-10">No services selected yet.<br/>Click items to add them.</p>
-                            ) : (
-                                <ul className="space-y-3">
-                                    {customItems.filter(i => i.checked).map((item) => (
-                                        <li key={item.id} className="flex items-start gap-2 text-gray-300 text-sm border-b border-white/5 pb-2 last:border-0">
-                                            <span className="text-brand-gold mt-1">✓</span> {item.name}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
+                        <div className="min-h-[150px] mb-6 space-y-4">
+                          {selectedItems.length === 0 ? (
+                            <p className="text-gray-500 italic text-sm text-center mt-10">
+                              No services selected yet.<br />Click items to add them.
+                            </p>
+                          ) : (
+                            <>
+                              <ul className="space-y-3">
+                                {selectedItems.map(item => (
+                                  <li
+                                    key={item.id}
+                                    className="flex justify-between items-start text-gray-300 text-sm border-b border-white/5 pb-2"
+                                  >
+                                    <span>✓ {item.name}</span>
+                                    <span className="text-gray-400">₹{item.price.toLocaleString()}</span>
+                                  </li>
+                                ))}
+                              </ul>
+
+                              <div className="border-t border-white/10 pt-4 flex justify-between font-bold text-white">
+                                <span>Total</span>
+                                <span className="text-brand-gold">
+                                  ₹{totalAmount.toLocaleString()}
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         <button 
                             onClick={handleCustomSubmit}
-                            disabled={customItems.filter(i => i.checked).length === 0}
+                            disabled={selectedItems.length === 0}
                             className={`w-full py-4 font-bold rounded-xl transition-all shadow-lg flex justify-center items-center gap-2
-                            ${customItems.filter(i => i.checked).length > 0
-                                ? 'bg-white text-brand-dark hover:bg-brand-gold cursor-pointer' 
+                            ${selectedItems.length > 0
+                                ? 'bg-white text-black hover:bg-brand-gold cursor-pointer' 
                                 : 'bg-white/10 text-gray-500 cursor-not-allowed'}`}
                         >
                             <FaPaperPlane /> Send Custom Inquiry

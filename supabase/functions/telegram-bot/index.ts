@@ -56,8 +56,14 @@ async function handleDatabaseNotification(req: Request) {
       const booking = payload.record
       if (!booking) return new Response('No record', { status: 400 })
 
-      // Check Clashes
-      const { data: clashData } = await supabase.from('bookings').select('client_name, assigned_to').eq('booking_date', booking.booking_date).eq('status', 'confirmed').maybeSingle()
+      // Check Clashes (Exclude self)
+      const { data: clashData } = await supabase
+          .from('bookings')
+          .select('client_name, assigned_to')
+          .eq('booking_date', booking.booking_date)
+          .eq('status', 'confirmed')
+          .neq('id', booking.id) // Exclude current booking
+          .maybeSingle()
 
       // --- DETERMINE MESSAGE STYLE ---
       const eventType = booking.event_type || "General Inquiry";
@@ -99,13 +105,16 @@ async function handleDatabaseNotification(req: Request) {
       }
 
       // Show Additional Info
-      if (booking.additional_info) {
-          message += `\n\n📝 <b>Notes:</b>\n<i>${booking.additional_info}</i>`
+      // Show Additional Info (Custom Quote Details)
+      if (booking.additional_info && eventType.includes("Custom")) {
+          message += `\n\n${icon} <b>Selected Items:</b>\n${booking.additional_info}\n\n<b>Total: ${eventType.match(/\(Total:.*?₹.*?\)/g) || ''}</b>`
+      } else if (booking.additional_info) {
+           message += `\n\n📝 <b>Notes:</b>\n<i>${booking.additional_info}</i>`
       }
       
-      // Show specific details for Custom/Full
-      if (eventType && eventType !== "General Inquiry") {
-        message += `\n\n${icon} <b>Request:</b> ${eventType.replace('Custom Quote Request', 'Selected Items')}`
+      // Show specific details for Full Package (if no custom info)
+      else if (eventType && eventType !== "General Inquiry") {
+        message += `\n\n${icon} <b>Request:</b> ${eventType}`
       }
 
       // Only show action buttons if NO TEAM is assigned yet

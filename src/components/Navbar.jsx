@@ -63,6 +63,11 @@ const Navbar = () => {
                 <RouterLink to="/quotation">Packages</RouterLink>
             </li>
 
+            {/* New Samples Link */}
+            <li className="cursor-pointer capitalize font-medium text-brand-text hover:text-brand-red transition-colors">
+               <a href="https://drive.google.com/drive/folders/1BaMppIppC1-VIZkcXsYDr02WvGdoJacG" target="_blank" rel="noopener noreferrer">Samples</a>
+            </li>
+
             <li className="ml-4">
                {location.pathname === '/' ? (
                    <ScrollLink to="contact" smooth duration={500} className="border border-brand-red text-brand-red px-6 py-2 rounded-full hover:bg-brand-red hover:text-white transition-all cursor-pointer">
@@ -82,13 +87,22 @@ const Navbar = () => {
         </div>
 
         {/* MOBILE MENU */}
-        {nav && (
-          <ul className="flex flex-col justify-center items-center absolute top-0 left-0 w-full h-screen bg-brand-dark text-brand-text z-40">
-             <li className="py-6 text-2xl"><RouterLink onClick={() => setNav(false)} to="/">Home</RouterLink></li>
-             <li className="py-6 text-2xl"><RouterLink onClick={() => setNav(false)} to="/quotation">Packages</RouterLink></li>
-             <li className="py-6 text-2xl"><RouterLink onClick={() => handleNav('contact')} to="/">Contact</RouterLink></li>
-          </ul>
-        )}
+       {nav && (
+           <>
+               <div
+                   className="fixed inset-0 bg-black/70 z-30"
+                   onClick={() => setNav(false)}
+               ></div>
+               <ul className="flex flex-col justify-center items-center absolute top-0 left-0 w-full h-screen bg-brand-dark text-brand-text z-40">
+                   <li className="py-4 text-2xl"><RouterLink onClick={() => setNav(false)} to="/">Home</RouterLink></li>
+                   <li className="py-4 text-2xl"><span onClick={() => {handleNav('about'); setNav(false);}} className="cursor-pointer">About</span></li>
+                   <li className="py-4 text-2xl"><span onClick={() => {handleNav('portfolio'); setNav(false);}} className="cursor-pointer">Portfolio</span></li>
+                   <li className="py-4 text-2xl"><RouterLink onClick={() => setNav(false)} to="/quotation">Packages</RouterLink></li>
+                   <li className="py-4 text-2xl"><a href="https://drive.google.com/drive/folders/1BaMppIppC1-VIZkcXsYDr02WvGdoJacG" target="_blank" rel="noopener noreferrer">Samples</a></li>
+                   <li className="py-4 text-2xl"><span onClick={() => {handleNav('contact'); setNav(false);}} className="cursor-pointer">Contact</span></li>
+               </ul>
+           </>
+       )}
       </div>
     </div>
   );
