@@ -30,7 +30,7 @@ const Hero = () => {
   }, []);
 
   return (
-    <div name="home" className="relative h-screen w-full flex items-center justify-center overflow-hidden">
+    <div name="home" className="relative h-[100dvh] w-full flex items-center justify-center overflow-hidden">
 
       {/* Background Crossfade */}
       <div className="absolute inset-0 z-0">

@@ -1,5 +1,13 @@
 @import "tailwindcss";
+
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   /* Ensure the background is solid deep teal */
-  @apply bg-[#0b262d] text-[#f4f4f4] font-sans overflow-x-hidden; 
+  @apply bg-[#0b262d] text-[#f4f4f4] font-sans; 
 }

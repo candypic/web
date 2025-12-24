@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { create } from "https://deno.land/x/djwt@v2.8/mod.ts";
+
+const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') || '{}');
 
 // ---------------------------------------------------------
 // 🔑 ENVIRONMENT VARIABLES
@@ -8,7 +11,7 @@ const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const CHAT_ID = Deno.env.get('TELEGRAM_CHAT_ID')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const FCM_SERVER_KEY = Deno.env.get('FCM_SERVER_KEY')! 
+// const FCM_SERVER_KEY = Deno.env.get('FCM_SERVER_KEY')! // Legacy API Key (Deprecated)
 
 // ---------------------------------------------------------
 // ⚙️ CONFIGURATION
@@ -28,8 +31,11 @@ serve(async (req) => {
   }
 
   // 1. DATABASE TRIGGER
-  if (req.method === 'POST' && url.searchParams.get('type') === 'notify') {
-    return handleDatabaseNotification(req)
+  if (req.method === 'POST') {
+      const type = url.searchParams.get('type')
+      if (type === 'notify') return handleDatabaseNotification(req)
+      if (type === 'booking_update') return handleBookingUpdate(req)
+      if (type === 'device_register') return handleDeviceRegister(req)
   }
 
   // 2. TELEGRAM INTERACTION
@@ -112,9 +118,6 @@ async function handleDatabaseNotification(req: Request) {
 // ------------------------------------------------------------------
 // 📩 MESSAGE HANDLER
 // ------------------------------------------------------------------
-// ------------------------------------------------------------------
-// 📩 MESSAGE HANDLER
-// ------------------------------------------------------------------
 async function handleMessage(msg: any) {
   const chatId = msg.chat.id
   const text = msg.text
@@ -160,11 +163,20 @@ async function handleMessage(msg: any) {
                 await supabase.from('bookings').update({ status: 'confirmed', assigned_to: updatedList }).eq('id', bookingId)
                 
                 // 2. Push Notification
-                if (contactPhone && current) {
-                    sendPushToPhone(contactPhone, `You have been assigned to: ${current.client_name} on ${current.booking_date}`)
-                }
+        if (contactPhone && current) {
+            console.log(`[Assignment] Sending push to ${contactPhone} for booking ${bookingId}`);
+            await sendPushToPhone(contactPhone, `You have been assigned to: ${current.client_name} on ${current.booking_date}`)
 
-                // 3. SEND TWO MESSAGES (Fix for missing button)
+            // Update bookings with assigned phone
+            const { data: booking } = await supabase.from('bookings').select('assigned_phones').eq('id', bookingId).single()
+            let updatedPhones = booking?.assigned_phones || []
+            if (!updatedPhones.includes(contactPhone)) {
+              updatedPhones.push(contactPhone)
+              await supabase.from('bookings').update({ assigned_phones: updatedPhones }).eq('id', bookingId)
+            }
+        }
+
+        // 3. SEND TWO MESSAGES (Fix for missing button)
                 
                 // Message 1: Confirmation + DONE Button
                 const doneKeyboard = {
@@ -285,29 +297,114 @@ async function handleCallback(query: any) {
 }
 
 // ------------------------------------------------------------------
-// 🚀 PUSH NOTIFICATION
+// 🚀 PUSH NOTIFICATION (FCM V1 API)
 // ------------------------------------------------------------------
-async function sendPushToPhone(phoneNumber: string, messageBody: string) {
-    if (!FCM_SERVER_KEY) return;
-    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
-    const { data: devices } = await supabase.from('team_devices').select('push_token').ilike('phone', `%${cleanPhone}`) 
-    if (!devices || devices.length === 0) return;
-
-    const promises = devices.map(d => 
-        fetch('https://fcm.googleapis.com/fcm/send', {
-            method: 'POST',
-            headers: { 'Authorization': `key=${FCM_SERVER_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                to: d.push_token,
-                notification: {
-                    title: "📅 New Assignment",
-                    body: messageBody,
-                    icon: "https://candy-pic.vercel.app/logo-nonsquare.png",
-                    click_action: "https://candy-pic.vercel.app/calendar"
-                }
-            })
-        })
+async function getAccessToken() {
+  try {
+    // Import the private key
+    const pem = serviceAccount.private_key;
+    const binaryKey = Uint8Array.from(
+      atob(pem.replace(/-----BEGIN PRIVATE KEY-----|\n|-----END PRIVATE KEY-----/g, "")),
+      (c) => c.charCodeAt(0)
     );
+    
+    const key = await crypto.subtle.importKey(
+      "pkcs8",
+      binaryKey,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const jwt = await create(
+      { alg: "RS256", typ: "JWT" },
+      {
+        iss: serviceAccount.client_email,
+        scope: "https://www.googleapis.com/auth/firebase.messaging",
+        aud: "https://oauth2.googleapis.com/token",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000),
+      },
+      key
+    );
+
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+    });
+
+    const data = await res.json();
+    return data.access_token;
+  } catch (err) {
+    console.error("Error generating Access Token:", err);
+    return null;
+  }
+}
+
+async function sendPushToPhone(phoneNumber: string, messageBody: string) {
+    console.log(`[Push] Attempting to send push to: ${phoneNumber}`);
+    
+    // Get Access Token for V1 API
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+        console.error("[Push] Failed to get FCM Access Token");
+        return;
+    }
+
+    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
+    console.log(`[Push] Cleaned phone: ${cleanPhone}`);
+
+    const { data: devices, error } = await supabase.from('team_devices').select('push_token').ilike('phone', `%${cleanPhone}`) 
+    
+    if (error) {
+        console.error("[Push] Error fetching devices:", error);
+        return;
+    }
+
+    if (!devices || devices.length === 0) {
+        console.log(`[Push] No devices found for phone: ${cleanPhone}`);
+        return;
+    }
+
+    console.log(`[Push] Found ${devices.length} devices. Sending...`);
+
+    const projectId = serviceAccount.project_id;
+
+    const promises = devices.map(async d => {
+        try {
+            const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${accessToken}`, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({
+                    message: {
+                        token: d.push_token,
+                        notification: {
+                            title: "📅 New Assignment",
+                            body: messageBody
+                        },
+                        webpush: {
+                          fcm_options: {
+                            link: "https://candy-pic.vercel.app/calendar"
+                          },
+                          notification: {
+                            icon: "https://candy-pic.vercel.app/logo-nonsquare.png"
+                          }
+                        }
+                    }
+                })
+            });
+            const text = await res.text();
+            console.log(`[Push] FCM Response for ${d.push_token.slice(0, 10)}...: ${res.status} - ${text}`);
+            return text;
+        } catch (e) {
+            console.error(`[Push] Fetch error for ${d.push_token.slice(0, 10)}...:`, e);
+            return null;
+        }
+    });
     await Promise.all(promises);
 }
 
@@ -363,3 +460,89 @@ async function editMessage(chatId: string|number, msgId: number, text: string, m
 }
 
 async function sendError(chatId: number, text: string, replyToMsgId: number) { await sendMessage(chatId, `⚠️ ${text}`, null, true) }
+
+// ------------------------------------------------------------------
+// 🔔 BOOKING UPDATE HANDLER (Push + Pending)
+// ------------------------------------------------------------------
+async function handleBookingUpdate(req: Request) {
+    try {
+        const payload = await req.json()
+        const booking = payload.record
+        
+        // If no assigned phones, nothing to do
+        if (!booking || !booking.assigned_phones || booking.assigned_phones.length === 0) {
+            console.log("No assigned phones for booking", booking?.id)
+            return new Response('No phones assigned', { status: 200 })
+        }
+
+        console.log(`[BookingUpdate] Processing ${booking.assigned_phones.length} phones for booking ${booking.id}`)
+
+        const messageBody = `You have been assigned to: ${booking.client_name} on ${booking.booking_date}`;
+        
+        for (const phone of booking.assigned_phones) {
+            const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+            
+            // Check if device exists
+            const { data: devices } = await supabase.from('team_devices').select('id').ilike('phone', `%${cleanPhone}`)
+            
+            if (devices && devices.length > 0) {
+                // Device exists -> Send Push
+                console.log(`[BookingUpdate] Device found for ${cleanPhone}, sending push.`)
+                await sendPushToPhone(phone, messageBody) 
+            } else {
+                // Device missing -> Store Pending
+                console.log(`[BookingUpdate] No device for ${cleanPhone}, storing pending notification.`)
+                await supabase.from('pending_notifications').insert({
+                    phone: phone,
+                    title: "📅 New Assignment",
+                    body: messageBody,
+                    booking_id: booking.id,
+                    status: 'pending'
+                })
+            }
+        }
+        return new Response('Processed Booking Update', { status: 200 })
+    } catch (e) {
+        console.error("BookingUpdate Error:", e)
+        return new Response(String(e), { status: 500 })
+    }
+}
+
+// ------------------------------------------------------------------
+// 📲 DEVICE REGISTRATION HANDLER (Flush Pending)
+// ------------------------------------------------------------------
+async function handleDeviceRegister(req: Request) {
+    try {
+        const payload = await req.json()
+        const device = payload.record
+        if (!device || !device.phone) return new Response('Invalid Record', { status: 400 })
+
+        const cleanPhone = device.phone.replace(/\D/g, '').slice(-10);
+        console.log(`[DeviceRegister] Checking pending notifications for ${cleanPhone}`)
+
+        // Fetch all pending notifications
+        // Note: We fetch all pending because we need to fuzzy match the phone number
+        // Optimization: In a large system, we would store clean_phone column.
+        const { data: pendings } = await supabase.from('pending_notifications')
+            .select('*')
+            .eq('status', 'pending')
+        
+        if (!pendings || pendings.length === 0) {
+             return new Response('No pending notifications', { status: 200 })
+        }
+
+        const matches = pendings.filter((n: any) => n.phone.replace(/\D/g, '').slice(-10) === cleanPhone);
+        
+        console.log(`[DeviceRegister] Found ${matches.length} pending notifications.`)
+
+        for (const notif of matches) {
+            await sendPushToPhone(device.phone, notif.body);
+            await supabase.from('pending_notifications').update({ status: 'sent' }).eq('id', notif.id);
+        }
+
+        return new Response(`Flushed ${matches.length} notifications`, { status: 200 })
+    } catch (e) {
+        console.error("DeviceRegister Error:", e)
+        return new Response(String(e), { status: 500 })
+    }
+}

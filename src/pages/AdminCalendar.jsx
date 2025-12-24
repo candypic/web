@@ -1,28 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
-import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle, FaInfoCircle, FaBell } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle, FaInfoCircle, FaBell, FaAddressBook, FaPlus, FaArrowLeft, FaEdit, FaTimes } from 'react-icons/fa';
 import BottomDrawer from '../components/BottomDrawer';
 import { requestForToken } from '../lib/firebase'; // Ensure you created this file in previous steps
-
-// ---------------------------------------------
-// 👥 TEAM CONFIGURATION
-// ---------------------------------------------
-const TEAM_MEMBERS = ["Chandan", "Rahul", "Prajna", "Team B"];
 
 const AdminCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'create'
+  const [editingId, setEditingId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [tempName, setTempName] = useState(''); // For manual input
   
   // Form State
   const [formData, setFormData] = useState({
     clientName: '',
     clientPhone: '',
     endDate: '',
-    assignedTo: '',
+    assignedTo: [], // Array of { name, phone }
     additionalInfo: ''
   });
 
@@ -88,6 +86,48 @@ const AdminCalendar = () => {
         alert("An unexpected error occurred. See console.");
     }
   };
+
+  // --- CONTACT PICKER ---
+  const handlePickContact = async () => {
+    try {
+        if (!('contacts' in navigator && 'ContactsManager' in window)) {
+            alert("Contact Picker is not supported on this device. Try using Chrome on Android.");
+            return;
+        }
+        
+        const props = ['name', 'tel'];
+        const contacts = await navigator.contacts.select(props, { multiple: true });
+        
+        if (contacts.length > 0) {
+            const newPeople = contacts
+                .map(c => ({
+                    name: c.name ? c.name[0] : '',
+                    phone: c.tel ? c.tel[0] : ''
+                }))
+                .filter(p => p.name && !formData.assignedTo.some(existing => existing.name === p.name));
+            
+            if (newPeople.length > 0) {
+                setFormData(prev => ({
+                    ...prev,
+                    assignedTo: [...prev.assignedTo, ...newPeople]
+                }));
+            }
+        }
+    } catch (error) {
+        console.error("Contact pick failed:", error);
+    }
+  };
+
+  const addPerson = (name) => {
+    if (!name) return;
+    if (formData.assignedTo.some(p => p.name === name)) return;
+    setFormData(prev => ({ ...prev, assignedTo: [...prev.assignedTo, { name, phone: '' }] }));
+  };
+
+  const removePerson = (name) => {
+    setFormData(prev => ({ ...prev, assignedTo: prev.assignedTo.filter(p => p.name !== name) }));
+  };
+
   // --- 3. CALENDAR MATH ---
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
@@ -121,13 +161,31 @@ const AdminCalendar = () => {
         clientName: '', 
         clientPhone: '', 
         endDate: dateStr,
-        assignedTo: '',
+        assignedTo: [],
         additionalInfo: ''
     });
+    setEditingId(null);
+    setViewMode('list');
     setIsDrawerOpen(true);
   };
 
-  // --- 4. CREATE ENTRY LOGIC ---
+  const handleEdit = (ev) => {
+    const names = ev.assigned_to ? ev.assigned_to.split(', ') : [];
+    const phones = ev.assigned_phones || [];
+    const people = names.map((name, i) => ({ name, phone: phones[i] || '' }));
+
+    setFormData({
+        clientName: ev.event_type === 'Block' ? '' : ev.client_name,
+        clientPhone: ev.client_phone || '',
+        endDate: ev.booking_end_date || ev.booking_date,
+        assignedTo: people,
+        additionalInfo: ev.additional_info || ''
+    });
+    setEditingId(ev.id);
+    setViewMode('create');
+  };
+
+  // --- 4. CREATE / UPDATE ENTRY LOGIC ---
   const handleCreateEntry = async () => {
     if (!selectedDate) return;
     setIsLoading(true);
@@ -143,16 +201,23 @@ const AdminCalendar = () => {
             
             client_name: isBlocking ? 'Date Blocked' : formData.clientName,
             client_phone: formData.clientPhone || null,
-            assigned_to: formData.assignedTo || null,
+            assigned_to: formData.assignedTo.length > 0 ? formData.assignedTo.map(p => p.name).join(', ') : null,
+            assigned_phones: formData.assignedTo.map(p => p.phone).filter(Boolean),
             additional_info: formData.additionalInfo || null,
             // Only save end date if it's different from start date
             booking_end_date: formData.endDate !== formattedStartDate ? formData.endDate : null
         };
 
-        const { error } = await supabase.from('bookings').insert(payload);
-        if (error) throw error;
+        if (editingId) {
+            const { error } = await supabase.from('bookings').update(payload).eq('id', editingId);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from('bookings').insert(payload);
+            if (error) throw error;
+        }
         
         await fetchBookings();
+        setEditingId(null);
         setIsDrawerOpen(false);
     } catch (error) {
         alert(`Failed: ${error.message}`);
@@ -170,6 +235,20 @@ const AdminCalendar = () => {
         await fetchBookings();
     } catch (error) {
         alert("Failed to delete");
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const handleConfirm = async (id) => {
+    if (!confirm("Confirm this booking?")) return;
+    setIsLoading(true);
+    try {
+        const { error } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id);
+        if (error) throw error;
+        await fetchBookings();
+    } catch (error) {
+        alert("Failed to confirm");
     } finally {
         setIsLoading(false);
     }
@@ -281,103 +360,16 @@ const AdminCalendar = () => {
       <BottomDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        title={selectedDate ? format(selectedDate, 'EEEE, MMM do') : ''}
+        title={
+            viewMode === 'list' 
+                ? (selectedDate ? format(selectedDate, 'EEEE, MMM do') : '')
+                : 'New Booking'
+        }
       >
-        <div className="flex flex-col gap-6">
-            
-            {/* 1. CREATION FORM */}
-            <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold">Manage Date</h4>
-                
-                <div className="flex flex-col gap-3">
-                    
-                    {/* Date Range */}
-                    <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                        <FaCalendarAlt className="text-gray-500 ml-1" />
-                        <span className="text-xs text-gray-400 mr-2">Till When?</span>
-                        <input 
-                            type="date"
-                            value={formData.endDate}
-                            min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                            onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                            className="bg-transparent border-none outline-none text-white text-sm w-full [color-scheme:dark]"
-                        />
-                    </div>
-
-                    {/* Team & Phone Row */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                            <FaUserTag className="text-gray-500 ml-1" />
-                            <select 
-                                value={formData.assignedTo}
-                                onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
-                                className="bg-transparent border-none outline-none text-white text-sm w-full appearance-none"
-                            >
-                                <option value="" className="bg-black text-gray-500">Assign To...</option>
-                                {TEAM_MEMBERS.map(m => (
-                                    <option key={m} value={m} className="bg-black text-white">{m}</option>
-                                ))}
-                            </select>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                            <FaPhone className="text-gray-500 ml-1" />
-                            <input 
-                                type="tel"
-                                placeholder="Phone"
-                                value={formData.clientPhone}
-                                onChange={(e) => setFormData({...formData, clientPhone: e.target.value})}
-                                className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Client Name (Logic Trigger) */}
-                    <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                        <FaUser className="text-gray-500 ml-1" />
-                        <input 
-                            type="text"
-                            placeholder="Client Name (Leave Empty to BLOCK)"
-                            value={formData.clientName}
-                            onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
-                        />
-                    </div>
-
-                    {/* Additional Info */}
-                    <div className="flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                        <FaInfoCircle className="text-gray-500 ml-1 mt-1" />
-                        <textarea
-                            placeholder="Additional Info..."
-                            value={formData.additionalInfo}
-                            onChange={(e) => setFormData({...formData, additionalInfo: e.target.value})}
-                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600 h-10 resize-none pt-1"
-                        />
-                    </div>
-                    
-                    {/* Action Button */}
-                    <button 
-                        onClick={handleCreateEntry}
-                        disabled={isLoading}
-                        className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]
-                            ${!formData.clientName.trim() 
-                                ? 'bg-red-500/10 text-red-400 border border-red-500/30' // Block Style
-                                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'} // Booking Style
-                        `}
-                    >
-                        {isLoading ? 'Processing...' : (
-                            !formData.clientName.trim()
-                                ? <><FaBan /> Block Date</> 
-                                : <><FaCheckCircle /> Create Booking</>
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {/* 2. EXISTING EVENTS LIST */}
-            {eventsOnSelectedDate.length > 0 && (
-                <div>
-                    <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold px-1">Events on this day</h4>
+        {viewMode === 'list' ? (
+            <div className="flex flex-col gap-4">
+                {/* 1. EXISTING EVENTS LIST (View Mode) */}
+                {eventsOnSelectedDate.length > 0 ? (
                     <div className="space-y-3">
                         {eventsOnSelectedDate.map(ev => {
                             const isBlock = ev.event_type === 'Block' || ev.status === 'blocked';
@@ -416,7 +408,24 @@ const AdminCalendar = () => {
                                                 <FaWhatsapp size={20} />
                                             </a>
                                         )}
+
+                                        {ev.status === 'pending' && (
+                                            <button 
+                                                onClick={() => handleConfirm(ev.id)}
+                                                className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                                                title="Confirm Booking"
+                                            >
+                                                <FaCheckCircle size={14} />
+                                            </button>
+                                        )}
                                         
+                                        <button 
+                                            onClick={() => handleEdit(ev)}
+                                            className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 hover:bg-blue-500/30 transition-colors"
+                                        >
+                                            <FaEdit size={14} />
+                                        </button>
+
                                         <button 
                                             onClick={() => handleDelete(ev.id)}
                                             className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 hover:bg-red-500/30 transition-colors"
@@ -428,9 +437,175 @@ const AdminCalendar = () => {
                             );
                         })}
                     </div>
+                ) : (
+                    <div className="py-10 text-center text-gray-500 flex flex-col items-center gap-2">
+                        <FaCalendarAlt size={30} className="opacity-20" />
+                        <p>No bookings for this day</p>
+                    </div>
+                )}
+
+                {/* CREATE BUTTON */}
+                <button 
+                    onClick={() => {
+                        // Reset form for new entry
+                        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                        setFormData({ 
+                            clientName: '', 
+                            clientPhone: '', 
+                            endDate: dateStr,
+                            assignedTo: [],
+                            additionalInfo: ''
+                        });
+                        setEditingId(null);
+                        setViewMode('create');
+                    }}
+                    className="w-full py-4 bg-[#D4AF37] text-[#0b262d] font-bold rounded-xl flex items-center justify-center gap-2 mt-2 shadow-lg hover:bg-[#c4a030] transition-colors"
+                >
+                    <FaPlus /> Add New Booking
+                </button>
+            </div>
+        ) : (
+            <div className="flex flex-col gap-4">
+                {/* BACK BUTTON */}
+                <button 
+                    onClick={() => { setViewMode('list'); setEditingId(null); }}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors w-fit px-2"
+                >
+                    <FaArrowLeft size={12} /> <span className="text-xs uppercase tracking-widest">Back to List</span>
+                </button>
+
+                {/* 2. CREATION FORM (Create Mode) */}
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <h4 className="text-xs uppercase tracking-widest text-brand-gold mb-3 font-bold">
+                        {editingId ? 'Edit Booking' : 'New Booking'}
+                    </h4>
+                    
+                    <div className="flex flex-col gap-3">
+                        
+                        {/* Date Range */}
+                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                            <FaCalendarAlt className="text-gray-500 ml-1" />
+                            <span className="text-xs text-gray-400 mr-2">Till When?</span>
+                            <input 
+                                type="date"
+                                value={formData.endDate}
+                                min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                                onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                                className="bg-transparent border-none outline-none text-white text-sm w-full [color-scheme:dark]"
+                            />
+                        </div>
+
+                        {/* Team & Phone Row */}
+                        <div className="grid grid-cols-1 gap-3">
+                            {/* ASSIGNED TO (Multi-Select) */}
+                            <div className="bg-black/20 p-2 rounded-lg border border-white/5 relative">
+                                {/* Chips */}
+                                {formData.assignedTo.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {formData.assignedTo.map(p => (
+                                            <span key={p.name} className="bg-brand-gold/20 text-brand-gold text-xs px-2 py-1 rounded-full flex items-center gap-1 border border-brand-gold/30">
+                                                {p.name} 
+                                                <button onClick={() => removePerson(p.name)} className="hover:text-white"><FaTimes size={10}/></button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                <div className="flex flex-col gap-2">
+                                    {/* Contact Picker Button */}
+                                    <button 
+                                        onClick={handlePickContact}
+                                        className="w-full bg-white/5 border border-white/10 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium hover:bg-white/10 transition-colors text-brand-gold"
+                                    >
+                                        <FaAddressBook /> Add from Contacts
+                                    </button>
+                                    
+                                    {/* Manual Input Fallback */}
+                                    <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-lg border border-white/5">
+                                        <FaUserTag className="text-gray-500" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Or type name manually..." 
+                                            value={tempName}
+                                            onChange={e => setTempName(e.target.value)}
+                                            onKeyDown={e => { 
+                                                if(e.key === 'Enter') { 
+                                                    e.preventDefault(); 
+                                                    addPerson(tempName); 
+                                                    setTempName(''); 
+                                                } 
+                                            }}
+                                            className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                                        />
+                                        <button 
+                                            onClick={() => { addPerson(tempName); setTempName(''); }}
+                                            className="text-gray-400 hover:text-white transition-colors"
+                                            disabled={!tempName.trim()}
+                                        >
+                                            <FaPlus />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Phone Row */}
+                        <div className="grid grid-cols-1 gap-3">
+                            <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                                <FaPhone className="text-gray-500 ml-1" />
+                                <input 
+                                    type="tel"
+                                    placeholder="Phone"
+                                    value={formData.clientPhone}
+                                    onChange={(e) => setFormData({...formData, clientPhone: e.target.value})}
+                                    className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Client Name (Logic Trigger) */}
+                        <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                            <FaUser className="text-gray-500 ml-1" />
+                            <input 
+                                type="text"
+                                placeholder="Client Name (Leave Empty to BLOCK)"
+                                value={formData.clientName}
+                                onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                                className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600"
+                            />
+                        </div>
+
+                        {/* Additional Info */}
+                        <div className="flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                            <FaInfoCircle className="text-gray-500 ml-1 mt-1" />
+                            <textarea
+                                placeholder="Additional Info..."
+                                value={formData.additionalInfo}
+                                onChange={(e) => setFormData({...formData, additionalInfo: e.target.value})}
+                                className="bg-transparent border-none outline-none text-white text-sm w-full placeholder-gray-600 h-10 resize-none pt-1"
+                            />
+                        </div>
+                        
+                        {/* Action Button */}
+                        <button 
+                            onClick={handleCreateEntry}
+                            disabled={isLoading}
+                            className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]
+                                ${!formData.clientName.trim() 
+                                    ? 'bg-red-500/10 text-red-400 border border-red-500/30' // Block Style
+                                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'} // Booking Style
+                            `}
+                        >
+                            {isLoading ? 'Processing...' : (
+                                !formData.clientName.trim()
+                                    ? (editingId ? <><FaBan /> Update Block</> : <><FaBan /> Block Date</>) 
+                                    : (editingId ? <><FaCheckCircle /> Update Booking</> : <><FaCheckCircle /> Create Booking</>)
+                            )}
+                        </button>
+                    </div>
                 </div>
-            )}
-        </div>
+            </div>
+        )}
       </BottomDrawer>
     </div>
   );
