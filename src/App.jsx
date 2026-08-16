@@ -36,10 +36,17 @@ function RealtimePushManager() {
     const hasNotification = typeof Notification !== 'undefined';
     if (!hasNotification) return;
 
-    const currentEmail = (user?.email || session?.user?.email || '').toLowerCase().trim();
-    const currentName = (crewProfile?.name || '').toLowerCase().trim();
+    let localCrewName = '';
+    let localCrewEmail = '';
+    try {
+      localCrewName = (localStorage.getItem('candy_crew_name') || '').toLowerCase().trim();
+      localCrewEmail = (localStorage.getItem('candy_crew_email') || '').toLowerCase().trim();
+    } catch (e) {}
 
-    console.log('[CandyPic Push Listener] Initialized for user:', currentEmail, currentName || '(admin)');
+    const currentEmail = (user?.email || session?.user?.email || localCrewEmail || '').toLowerCase().trim();
+    const currentName = (crewProfile?.name || localCrewName || '').toLowerCase().trim();
+
+    console.log('[CandyPic Push Listener] Initialized for crew identity:', currentName || '(unnamed)', currentEmail || '(no email)');
 
     const channel = supabase.channel('studio-live-events', {
       config: { broadcast: { self: false } },
@@ -55,14 +62,14 @@ function RealtimePushManager() {
           ? payload.assignedCrew.map((c) => c.toLowerCase().trim())
           : [assignedTarget];
 
-        // Is this device's logged-in user among the assigned crew?
+        // Is this device's user among the assigned crew?
         const isRecipient =
           (currentName && assignedList.some((name) => name.includes(currentName) || currentName.includes(name))) ||
           (currentEmail && assignedList.some((name) => name.includes(currentEmail) || currentEmail.includes(name))) ||
-          (!currentEmail && !currentName); // Standalone PWA without login yet
+          (!currentEmail && !currentName); // Unregistered PWA fallback
 
         if (!isRecipient) {
-          console.log(`[CandyPic Push Listener] ⏭️ Notification is targeted for ${assignedTarget}. Skipping display on this device.`);
+          console.log(`[CandyPic Push Listener] ⏭️ Notification is targeted for ${assignedTarget}. Skipping on this device (${currentName || currentEmail}).`);
           return;
         }
 

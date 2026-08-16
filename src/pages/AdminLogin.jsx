@@ -163,6 +163,13 @@ export default function AdminLogin() {
         ...crewForm,
         pushToken: pushToken,
       });
+
+      // Remember registered crew identity on this device even before login
+      try {
+        localStorage.setItem('candy_crew_name', crewForm.name.trim());
+        localStorage.setItem('candy_crew_email', crewForm.email.trim());
+      } catch (e) {}
+
       setRegisterSuccess(true);
 
       // Trigger instant application submission push
