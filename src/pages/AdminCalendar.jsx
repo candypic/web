@@ -60,10 +60,18 @@ export default function AdminCalendar() {
   const [formData, setFormData] = useState({
     clientName: '',
     clientPhone: '',
+    altPhone: '',
+    startDate: '',
     endDate: '',
-    eventType: 'Wedding Photography',
-    assignedTo: [],
-    additionalInfo: '',
+    eventType: 'Wedding Photography & Cinema',
+    sessionSlot: 'Full Day (Morning to Night)',
+    venueLocation: '',
+    budgetTotal: '',
+    advancePaid: '',
+    assignedTeam: 'Chandan Naik',
+    specialNotes: '',
+    autoBlockCalendar: true,
+    autoGenerateVault: true,
   });
 
   // Block Reason state
@@ -125,37 +133,61 @@ export default function AdminCalendar() {
     setFormData({
       clientName: '',
       clientPhone: '',
+      altPhone: '',
+      startDate: dateStr,
       endDate: dateStr,
-      eventType: 'Wedding Photography',
-      assignedTo: [],
-      additionalInfo: '',
+      eventType: 'Wedding Photography & Cinema',
+      sessionSlot: 'Full Day (Morning to Night)',
+      venueLocation: '',
+      budgetTotal: '',
+      advancePaid: '',
+      assignedTeam: 'Chandan Naik',
+      specialNotes: '',
+      autoBlockCalendar: true,
+      autoGenerateVault: true,
     });
     setEditingId(null);
     setViewMode('list');
     setIsDrawerOpen(true);
   };
 
-  // --- 3. CREATE / UPDATE BOOKING ---
+  // --- 3. CREATE / UPDATE BOOKING WITH ALL DETAILS ---
   const handleSaveBooking = async (e) => {
     if (e) e.preventDefault();
-    if (!selectedDate || !formData.clientName.trim()) {
-      alert('Please enter client name');
+    if (!formData.clientName.trim()) {
+      alert('Please enter the client / couple name.');
+      return;
+    }
+    if (!formData.clientPhone.trim()) {
+      alert('Please enter the client phone number.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const formattedStartDate = format(selectedDate, 'yyyy-MM-dd');
+      const formattedStartDate = formData.startDate || (selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
+      const formattedEndDate = formData.endDate || formattedStartDate;
+
+      // Consolidate extra details in additional_info JSON or formatted string
+      const detailsList = [];
+      if (formData.venueLocation) detailsList.push(`📍 Venue: ${formData.venueLocation}`);
+      if (formData.sessionSlot) detailsList.push(`⏰ Slot: ${formData.sessionSlot}`);
+      if (formData.budgetTotal) detailsList.push(`💰 Total: ${formData.budgetTotal}`);
+      if (formData.advancePaid) detailsList.push(`💵 Advance: ${formData.advancePaid}`);
+      if (formData.altPhone) detailsList.push(`📞 Alt Phone: ${formData.altPhone}`);
+      if (formData.specialNotes) detailsList.push(`📝 Notes: ${formData.specialNotes}`);
+
+      const compiledNotes = detailsList.join(' | ');
+
       const payload = {
         client_name: formData.clientName.trim(),
         client_phone: formData.clientPhone.trim(),
         booking_date: formattedStartDate,
-        booking_end_date: formData.endDate || formattedStartDate,
+        booking_end_date: formattedEndDate,
         event_type: formData.eventType || 'Wedding Photography',
         status: 'confirmed',
-        assigned_to: formData.assignedTo.map((p) => p.name).join(', '),
-        assigned_phones: formData.assignedTo.map((p) => p.phone),
-        additional_info: formData.additionalInfo,
+        assigned_to: formData.assignedTeam || 'Chandan Naik',
+        additional_info: compiledNotes,
       };
 
       if (editingId) {
@@ -166,10 +198,38 @@ export default function AdminCalendar() {
         if (error) throw error;
       }
 
+      // Auto-generate Client Memory Vault if toggle is checked
+      if (formData.autoGenerateVault) {
+        const pin = Math.floor(1000 + Math.random() * 9000).toString();
+        const guestPin = 'GUEST';
+        const cleanSlug = `${formData.clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${formattedStartDate.slice(0, 4)}`;
+
+        try {
+          const newVault = await createClientEvent({
+            title: `${formData.clientName}'s Wedding`,
+            slug: cleanSlug,
+            client_name: formData.clientName.trim(),
+            client_phone: formData.clientPhone.trim(),
+            event_date: formattedStartDate,
+            passcode: pin,
+            guest_passcode: guestPin,
+            target_album_photos: 100,
+            status: 'active',
+            is_live_gallery: false,
+          });
+          setGeneratedVault(newVault);
+          await fetchData();
+          setViewMode('credentials');
+          return;
+        } catch (vaultErr) {
+          console.warn('Auto vault creation skipped:', vaultErr);
+        }
+      }
+
       await fetchData();
       setViewMode('list');
     } catch (error) {
-      alert(`Failed to save: ${error.message}`);
+      alert(`Failed to save booking: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -612,11 +672,16 @@ export default function AdminCalendar() {
             </div>
           )}
 
-          {/* VIEW 2: CREATE BOOKING */}
+          {/* VIEW 2: CREATE BOOKING (Comprehensive Details & Auto-Block) */}
           {viewMode === 'create' && (
-            <form onSubmit={handleSaveBooking} className="space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-serif text-lg text-white">Add New Photoshoot Booking</h3>
+            <form onSubmit={handleSaveBooking} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                <div>
+                  <h3 className="font-serif text-lg text-white">Create Booking &amp; Block Calendar</h3>
+                  <p className="text-[11px] text-brand-muted font-light">
+                    Schedules the shoot and automatically blocks the date range.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
@@ -626,65 +691,228 @@ export default function AdminCalendar() {
                 </button>
               </div>
 
-              <div>
-                <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
-                  Client / Couple Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ananya & Varun"
-                  value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                  className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-white outline-none focus:border-brand-gold"
-                />
-              </div>
+              {/* 1. Client Details */}
+              <div className="bg-black/30 p-3.5 rounded-2xl border border-white/10 space-y-3">
+                <span className="text-[10px] uppercase tracking-widest text-brand-gold font-bold block">
+                  1. Client / Couple Information
+                </span>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
-                    Phone Number
+                    Couple / Client Name *
                   </label>
                   <input
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={formData.clientPhone}
-                    onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
-                    className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-white outline-none focus:border-brand-gold"
+                    type="text"
+                    required
+                    placeholder="e.g. Priya Sharma &amp; Rahul Naik"
+                    value={formData.clientName}
+                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                    className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
-                    Event Type
-                  </label>
-                  <select
-                    value={formData.eventType}
-                    onChange={(e) => setFormData({ ...formData, eventType: e.target.value })}
-                    className="w-full rounded-xl bg-brand-deep border border-white/15 px-3 py-2.5 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
-                  >
-                    <option value="Wedding Photography">Wedding Photography</option>
-                    <option value="Pre-Wedding Shoot">Pre-Wedding Shoot</option>
-                    <option value="Engagement Ceremony">Engagement Ceremony</option>
-                    <option value="Haldi Ceremony">Haldi Ceremony</option>
-                    <option value="Event Coverage">Event Coverage</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Primary Phone (WhatsApp) *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="+91 98765 43210"
+                      value={formData.clientPhone}
+                      onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Alternate / Family Phone
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="Optional"
+                      value={formData.altPhone}
+                      onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
-                  Additional Notes (Venue, Timings)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Nirvana Beach Kumta, sunrise session..."
-                  value={formData.additionalInfo}
-                  onChange={(e) => setFormData({ ...formData, additionalInfo: e.target.value })}
-                  className="w-full rounded-xl bg-black/30 border border-white/10 p-3 text-xs text-white outline-none focus:border-brand-gold"
-                />
+              {/* 2. Schedule & Dates */}
+              <div className="bg-black/30 p-3.5 rounded-2xl border border-white/10 space-y-3">
+                <span className="text-[10px] uppercase tracking-widest text-brand-gold font-bold block">
+                  2. Date Range &amp; Shoot Schedule
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      End Date (Multi-Day Shoot)
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Event / Shoot Type
+                    </label>
+                    <select
+                      value={formData.eventType}
+                      onChange={(e) => setFormData({ ...formData, eventType: e.target.value })}
+                      className="w-full rounded-xl bg-brand-deep border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
+                    >
+                      <option value="Wedding Photography &amp; Cinema">Wedding Photography &amp; Cinema</option>
+                      <option value="Pre-Wedding Shoot">Pre-Wedding Shoot</option>
+                      <option value="Engagement Ceremony">Engagement Ceremony</option>
+                      <option value="Haldi &amp; Mehendi">Haldi &amp; Mehendi</option>
+                      <option value="Reception Coverage">Reception Coverage</option>
+                      <option value="Maternity &amp; Baby Shoot">Maternity &amp; Baby Shoot</option>
+                      <option value="Commercial / Event Shoot">Commercial / Event Shoot</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Shoot Slot / Timings
+                    </label>
+                    <select
+                      value={formData.sessionSlot}
+                      onChange={(e) => setFormData({ ...formData, sessionSlot: e.target.value })}
+                      className="w-full rounded-xl bg-brand-deep border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
+                    >
+                      <option value="Full Day (Morning to Night)">Full Day (Morning to Night)</option>
+                      <option value="Morning Muhurtham (6 AM - 2 PM)">Morning Muhurtham (6 AM - 2 PM)</option>
+                      <option value="Evening Reception (3 PM - 11 PM)">Evening Reception (3 PM - 11 PM)</option>
+                      <option value="Golden Hour / Sunset Session">Golden Hour / Sunset Session</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
+              {/* 3. Venue & Commercials */}
+              <div className="bg-black/30 p-3.5 rounded-2xl border border-white/10 space-y-3">
+                <span className="text-[10px] uppercase tracking-widest text-brand-gold font-bold block">
+                  3. Venue &amp; Commercials
+                </span>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                    Venue / Shoot Location
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mahabaleshwar Temple Gokarna / Nirvana Beach Kumta"
+                    value={formData.venueLocation}
+                    onChange={(e) => setFormData({ ...formData, venueLocation: e.target.value })}
+                    className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Agreed Total Package (₹)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ₹75,000"
+                      value={formData.budgetTotal}
+                      onChange={(e) => setFormData({ ...formData, budgetTotal: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Advance Received (₹)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ₹25,000"
+                      value={formData.advancePaid}
+                      onChange={(e) => setFormData({ ...formData, advancePaid: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Assigned Crew / Lead
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Chandan Naik + Drone Cam"
+                      value={formData.assignedTeam}
+                      onChange={(e) => setFormData({ ...formData, assignedTeam: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
+                      Special Notes / Requirements
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Traditional + Candid drone..."
+                      value={formData.specialNotes}
+                      onChange={(e) => setFormData({ ...formData, specialNotes: e.target.value })}
+                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Automations */}
+              <div className="p-3 bg-brand-gold/10 border border-brand-gold/25 rounded-2xl space-y-2">
+                <label className="flex items-center gap-2.5 text-xs text-white cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.autoBlockCalendar}
+                    onChange={(e) => setFormData({ ...formData, autoBlockCalendar: e.target.checked })}
+                    className="rounded accent-brand-gold w-4 h-4"
+                  />
+                  <span className="font-semibold">Block this date range on public website calendar</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 text-xs text-white cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.autoGenerateVault}
+                    onChange={(e) => setFormData({ ...formData, autoGenerateVault: e.target.checked })}
+                    className="rounded accent-brand-gold w-4 h-4"
+                  />
+                  <span className="font-semibold">Auto-generate Private Client Memory Vault &amp; 4-Digit PIN</span>
+                </label>
+              </div>
+
+              {/* Form Buttons */}
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
@@ -696,9 +924,9 @@ export default function AdminCalendar() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="rounded-full px-6 py-2.5 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all shadow-md shadow-brand-gold/20"
+                  className="rounded-full px-7 py-3 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 cursor-pointer"
                 >
-                  {isLoading ? 'Saving...' : 'Save Booking'}
+                  {isLoading ? 'Saving Booking...' : 'Save & Block Calendar'}
                 </button>
               </div>
             </form>
