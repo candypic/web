@@ -85,12 +85,13 @@ export default function AdminLogin() {
     try {
       if (!('Notification' in window)) {
         alert('This browser does not support push notifications.');
+        setNotificationsEnabled(true);
         return;
       }
 
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        setError('Push notification permission was denied. Please allow notifications in your browser settings.');
+        setError('Push notification permission was not granted. Please click "Allow" in your browser prompt.');
         return;
       }
 
@@ -98,6 +99,31 @@ export default function AdminLogin() {
       const token = await requestForToken().catch(() => null);
       setPushToken(token || 'web_push_granted');
       setNotificationsEnabled(true);
+
+      // Trigger immediate instant confirmation notification
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          if (reg && reg.showNotification) {
+            reg.showNotification('🎉 Notifications Enabled!', {
+              body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
+              icon: '/logo-nonsquare.png',
+            });
+          } else {
+            new Notification('🎉 Notifications Enabled!', {
+              body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
+              icon: '/logo-nonsquare.png',
+            });
+          }
+        } else {
+          new Notification('🎉 Notifications Enabled!', {
+            body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
+            icon: '/logo-nonsquare.png',
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Native notification banner warning:', notifErr);
+      }
     } catch (err) {
       console.warn('Push error:', err);
       setNotificationsEnabled(true); // Fallback so user can complete registration
@@ -128,6 +154,24 @@ export default function AdminLogin() {
         pushToken: pushToken,
       });
       setRegisterSuccess(true);
+
+      // Trigger instant application submission push
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            reg.showNotification('👥 Application Submitted!', {
+              body: 'Your profile has been sent to Super Admin (chandan@candypic.com) for approval.',
+              icon: '/logo-nonsquare.png',
+            });
+          } else {
+            new Notification('👥 Application Submitted!', {
+              body: 'Your profile has been sent to Super Admin (chandan@candypic.com) for approval.',
+              icon: '/logo-nonsquare.png',
+            });
+          }
+        }
+      } catch (e) {}
     } catch (err) {
       setError(err?.message || 'Could not submit crew registration. Please check your details.');
     } finally {

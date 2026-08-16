@@ -237,6 +237,28 @@ export default function AdminCalendar() {
         if (error) throw error;
       }
 
+      // 1. Dispatch Assignment Notification for the Crew Member
+      const assignedMember = crewMembers.find((c) => c.name === formData.assignedTeam);
+      const crewPhone = assignedMember?.phone || '';
+
+      try {
+        await createAdminNotification({
+          title: `📅 Shoot Assigned: ${formData.assignedTeam}`,
+          message: `${formData.assignedTeam} assigned to ${formData.clientName} (${formData.eventType}) on ${formattedStartDate}.`,
+          type: 'booking',
+          link: '/admin/calendar',
+          metadata: {
+            assigned_to: formData.assignedTeam,
+            phone: crewPhone,
+            date: formattedStartDate,
+            client: formData.clientName,
+            venue: formData.venueLocation,
+          },
+        });
+      } catch (notifErr) {
+        console.warn('Crew notification dispatch skipped:', notifErr);
+      }
+
       // Auto-generate Client Memory Vault if toggle is checked
       if (formData.autoGenerateVault) {
         const pin = Math.floor(1000 + Math.random() * 9000).toString();
@@ -1151,8 +1173,29 @@ export default function AdminCalendar() {
                   rel="noopener noreferrer"
                   className="w-full rounded-full py-3 bg-[#25D366] text-white font-semibold text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
                 >
-                  <FaWhatsapp size={15} /> Send Directly on WhatsApp
+                  <FaWhatsapp size={15} /> Send PIN to Couple (WhatsApp)
                 </a>
+
+                {formData.assignedTeam && (
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                      `📸 *Candy Pic — Shoot Assignment*\n\n` +
+                      `👤 *Assigned Lead:* ${formData.assignedTeam}\n` +
+                      `💍 *Event:* ${formData.eventType || 'Wedding Photography'}\n` +
+                      `🗓 *Date:* ${formData.startDate || generatedVault.event_date}\n` +
+                      `👥 *Client:* ${formData.clientName} (${formData.clientPhone})\n` +
+                      (formData.venueLocation ? `📍 *Venue:* ${formData.venueLocation}\n` : '') +
+                      (formData.sessionSlot ? `⏰ *Slot:* ${formData.sessionSlot}\n` : '') +
+                      (formData.specialNotes ? `📝 *Notes:* ${formData.specialNotes}\n` : '') +
+                      `\nPlease confirm your availability with Chandan.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full rounded-full py-3 bg-brand-gold/20 border border-brand-gold/40 text-brand-gold font-semibold text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-brand-gold hover:text-brand-dark transition-all"
+                  >
+                    <FaShareAlt size={13} /> Send Itinerary to {formData.assignedTeam} (WhatsApp)
+                  </a>
+                )}
 
                 <div className="flex justify-between pt-2">
                   <button
