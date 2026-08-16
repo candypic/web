@@ -88,24 +88,31 @@ export default function AdminEvents() {
   const [copiedLightroom, setCopiedLightroom] = useState(false);
 
   // 1. Fetch Events
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (autoSelectId) => {
     try {
       setLoading(true);
       const data = await listClientEvents();
       setEvents(data);
 
-      if (selectedEventIdParam) {
-        const found = data.find((e) => e.id === selectedEventIdParam);
-        if (found) setSelectedEvent(found);
-      } else if (data.length > 0 && !selectedEvent) {
-        setSelectedEvent(data[0]);
+      const targetId = autoSelectId || selectedEventIdParam;
+      if (targetId) {
+        const found = data.find((e) => e.id === targetId);
+        if (found) {
+          setSelectedEvent(found);
+          return;
+        }
       }
+
+      setSelectedEvent((prev) => {
+        if (prev && data.some((e) => e.id === prev.id)) return prev;
+        return data.length > 0 ? data[0] : null;
+      });
     } catch (err) {
       console.error('Error loading events:', err);
     } finally {
       setLoading(false);
     }
-  }, [selectedEventIdParam, selectedEvent]);
+  }, [selectedEventIdParam]);
 
   useEffect(() => {
     loadEvents();
@@ -113,7 +120,11 @@ export default function AdminEvents() {
 
   // 2. Fetch Photos and Submissions for Selected Event
   useEffect(() => {
-    if (!selectedEvent) return;
+    if (!selectedEvent?.id) {
+      setPhotos([]);
+      setSubmissions([]);
+      return;
+    }
 
     const loadEventDetails = async () => {
       try {
@@ -132,7 +143,7 @@ export default function AdminEvents() {
     };
 
     loadEventDetails();
-  }, [selectedEvent]);
+  }, [selectedEvent?.id]);
 
   // Handle Event Selection
   const handleSelectEvent = (evt) => {
