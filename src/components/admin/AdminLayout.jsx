@@ -57,13 +57,34 @@ export default function AdminLayout({ children, title, subtitle, actions }) {
 
     fetchCounters();
 
+    // Auto-request notification permission for logged in admin if supported
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+
     const channel = supabase
       .channel('admin-layout-counters')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_notifications' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_notifications' }, (payload) => {
         fetchCounters();
+        if (payload.eventType === 'INSERT' && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification(payload.new?.title || '📸 Candy Pic Alert', {
+              body: payload.new?.message || 'New studio activity',
+              icon: '/logo-192.png',
+            });
+          } catch (e) {}
+        }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crew_profiles' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crew_profiles' }, (payload) => {
         fetchCounters();
+        if (payload.eventType === 'INSERT' && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('👥 New Crew Registration', {
+              body: `${payload.new?.name} (${payload.new?.role}) registered to join the crew. Awaiting your approval.`,
+              icon: '/logo-192.png',
+            });
+          } catch (e) {}
+        }
       })
       .subscribe();
 
