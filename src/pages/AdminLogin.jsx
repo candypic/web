@@ -16,7 +16,7 @@ export default function AdminLogin() {
 
   // Already authenticated → go straight to the dashboard.
   if (!authLoading && session) {
-    return <Navigate to="/admin/gallery" replace />;
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -36,7 +36,7 @@ export default function AdminLogin() {
         setError(signInError.message || 'Unable to sign in. Please check your details.');
         return;
       }
-      navigate('/admin/gallery');
+      navigate('/admin/dashboard');
     } catch (err) {
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
