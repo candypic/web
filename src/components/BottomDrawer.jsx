@@ -32,28 +32,29 @@ const BottomDrawer = ({ isOpen, onClose, title, children }) => {
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-[#1e293b] rounded-t-2xl shadow-2xl border-t border-white/10 max-h-[85vh] flex flex-col"
+            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            className="fixed bottom-0 left-0 right-0 z-[70] bg-[#091b20]/95 backdrop-blur-2xl rounded-t-3xl shadow-2xl border-t border-white/15 max-h-[90vh] flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]"
           >
             {/* Handle Bar */}
-            <div className="flex justify-center pt-3 pb-1" onClick={onClose}>
-                <div className="w-12 h-1.5 bg-gray-600 rounded-full cursor-pointer hover:bg-gray-500 transition-colors" />
+            <div className="flex justify-center pt-3.5 pb-1 cursor-pointer" onClick={onClose}>
+              <div className="w-12 h-1.5 bg-white/20 rounded-full hover:bg-white/40 transition-colors" />
             </div>
 
             {/* Header */}
-            <div className="px-5 py-3 flex justify-between items-center border-b border-white/5 shrink-0">
-                <h3 className="text-lg font-bold text-white">{title}</h3>
-                <button 
-                    onClick={onClose}
-                    className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
-                >
-                    <FaTimes className="text-gray-400" />
-                </button>
+            <div className="px-5 py-3.5 flex justify-between items-center border-b border-white/10 shrink-0">
+              <h3 className="font-serif text-base sm:text-lg font-bold text-white">{title}</h3>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                <FaTimes size={14} />
+              </button>
             </div>
 
             {/* Content - Scrollable */}
-            <div className="p-5 overflow-y-auto overflow-x-hidden safe-pb">
-                {children}
+            <div className="p-4 sm:p-6 overflow-y-auto overflow-x-hidden">
+              {children}
             </div>
           </motion.div>
         </>

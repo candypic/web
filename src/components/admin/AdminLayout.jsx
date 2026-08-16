@@ -189,20 +189,20 @@ export default function AdminLayout({ children, title, subtitle, actions }) {
       {/* =========================================================================
           2. MOBILE TOP HEADER
           ========================================================================= */}
-      <header className="md:hidden sticky top-0 z-40 bg-brand-darker/90 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center justify-between">
+      <header className="md:hidden sticky top-0 z-40 bg-brand-dark/95 backdrop-blur-xl border-b border-white/10 px-3.5 py-2.5 flex items-center justify-between">
         <Link to="/admin/dashboard" className="flex items-center gap-2">
-          <img src={logo} alt="Candy Pic" className="h-8 w-auto" />
-          <span className="font-serif text-base text-white font-semibold">Admin Hub</span>
+          <img src={logo} alt="Candy Pic" className="h-7 w-auto object-contain" />
+          <span className="font-serif text-sm text-white font-semibold">Admin Hub</span>
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Link
             to="/admin/notifications"
-            className="relative p-2.5 rounded-full bg-white/5 text-brand-gold"
+            className="relative p-2 rounded-full bg-white/5 text-brand-gold hover:bg-white/10 transition-colors"
           >
-            <FaBell size={16} />
+            <FaBell size={14} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-brand-red text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-brand-red text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
                 {unreadCount}
               </span>
             )}
@@ -211,37 +211,47 @@ export default function AdminLayout({ children, title, subtitle, actions }) {
           <Link
             to="/"
             target="_blank"
-            className="p-2.5 rounded-full bg-white/5 text-brand-muted hover:text-white"
+            className="p-2 rounded-full bg-white/5 text-brand-muted hover:text-white transition-colors"
+            title="View Public Website"
           >
-            <FaExternalLinkAlt size={14} />
+            <FaExternalLinkAlt size={12} />
           </Link>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="p-2 rounded-full bg-white/5 text-brand-muted hover:text-brand-red hover:bg-brand-red/10 transition-colors cursor-pointer"
+            title="Sign Out"
+          >
+            <FaSignOutAlt size={12} />
+          </button>
         </div>
       </header>
 
       {/* =========================================================================
           3. MAIN CONTENT CONTAINER
           ========================================================================= */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
         {/* Top bar header */}
-        <div className="border-b border-white/10 bg-brand-dark/50 px-4 sm:px-8 py-5 sm:py-6">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="border-b border-white/10 bg-brand-dark/50 px-3.5 sm:px-8 py-4 sm:py-6">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
-              <h1 className="font-serif text-2xl sm:text-3xl text-white leading-tight">{title}</h1>
-              {subtitle && <p className="text-xs sm:text-sm text-brand-muted font-light mt-1">{subtitle}</p>}
+              <h1 className="font-serif text-xl sm:text-3xl text-white leading-tight">{title}</h1>
+              {subtitle && <p className="text-xs sm:text-sm text-brand-muted font-light mt-0.5 sm:mt-1">{subtitle}</p>}
             </div>
 
-            {actions && <div className="flex items-center gap-3 shrink-0">{actions}</div>}
+            {actions && <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">{actions}</div>}
           </div>
         </div>
 
         {/* Page Content */}
-        <div className="p-4 sm:p-8 max-w-7xl mx-auto w-full flex-1">{children}</div>
+        <div className="p-3 sm:p-8 max-w-7xl mx-auto w-full flex-1">{children}</div>
       </main>
 
       {/* =========================================================================
-          4. MOBILE BOTTOM APP NAVIGATION BAR
+          4. MOBILE BOTTOM APP NAVIGATION BAR (Optimized 6-Column Layout)
           ========================================================================= */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-brand-dark/95 backdrop-blur-2xl border-t border-white/10 px-2 py-1.5 flex items-center justify-around">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-brand-dark/95 backdrop-blur-2xl border-t border-white/10 px-1 py-1.5 flex items-center justify-around pb-[max(0.4rem,env(safe-area-inset-bottom))] shadow-2xl">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path || (item.path === '/admin/dashboard' && location.pathname === '/admin');
@@ -250,16 +260,22 @@ export default function AdminLayout({ children, title, subtitle, actions }) {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-medium transition-colors relative ${
-                isActive ? 'text-brand-gold font-bold' : 'text-brand-muted hover:text-white'
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[9px] font-medium transition-all relative ${
+                isActive ? 'text-brand-gold font-bold bg-white/5' : 'text-brand-muted hover:text-white'
               }`}
             >
-              <Icon size={18} className="mb-0.5" />
-              <span>{item.label.split(' ')[0]}</span>
+              <Icon size={16} className="mb-0.5" />
+              <span className="truncate max-w-full text-center">{item.label.split(' ')[0]}</span>
 
               {item.path === '/admin/notifications' && unreadCount > 0 && (
-                <span className="absolute top-1 right-3 w-3.5 h-3.5 rounded-full bg-brand-red text-white text-[8px] font-bold flex items-center justify-center">
+                <span className="absolute top-0 right-2 w-3.5 h-3.5 rounded-full bg-brand-red text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
                   {unreadCount}
+                </span>
+              )}
+
+              {item.path === '/admin/crew' && pendingCrewCount > 0 && (
+                <span className="absolute top-0 right-2 px-1 py-0.2 rounded-full bg-brand-red text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
+                  {pendingCrewCount}
                 </span>
               )}
             </Link>

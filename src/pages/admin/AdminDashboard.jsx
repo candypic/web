@@ -196,13 +196,13 @@ export default function AdminDashboard() {
                   {recentEvents.map((evt) => (
                     <div
                       key={evt.id}
-                      className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-serif text-base text-white font-medium">{evt.title}</h3>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-serif text-sm sm:text-base text-white font-medium truncate">{evt.title}</h3>
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider ${
                               evt.status === 'submitted'
                                 ? 'bg-brand-gold/20 text-brand-gold border border-brand-gold/40'
                                 : evt.status === 'delivered'
@@ -213,7 +213,7 @@ export default function AdminDashboard() {
                             {evt.status === 'submitted' ? 'Album Submitted' : evt.status}
                           </span>
                         </div>
-                        <p className="text-xs text-brand-muted font-light mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-brand-muted font-light mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <span>{evt.client_name}</span>
                           <span>•</span>
                           <span>PIN: <strong className="font-mono text-brand-gold">{evt.passcode}</strong></span>
@@ -222,18 +222,18 @@ export default function AdminDashboard() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
                         <Link
                           to={`/portal/${evt.slug}`}
                           target="_blank"
-                          className="rounded-full px-3 py-1.5 bg-white/5 hover:bg-white/15 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+                          className="flex-1 sm:flex-initial text-center justify-center rounded-full px-3 py-1.5 bg-white/5 hover:bg-white/15 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
                         >
                           <FaExternalLinkAlt size={10} className="text-brand-gold" /> Client Link
                         </Link>
 
                         <Link
                           to={`/admin/events?select=${evt.id}`}
-                          className="rounded-full px-3.5 py-1.5 bg-brand-gold/20 text-brand-gold hover:bg-brand-gold hover:text-brand-dark text-xs font-semibold uppercase tracking-wider transition-all"
+                          className="flex-1 sm:flex-initial text-center justify-center rounded-full px-3.5 py-1.5 bg-brand-gold/20 text-brand-gold hover:bg-brand-gold hover:text-brand-dark text-xs font-semibold uppercase tracking-wider transition-all"
                         >
                           Manage
                         </Link>
@@ -245,7 +245,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Quick Action Shortcuts */}
-            <div className="grid sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Link
                 to="/admin/events"
                 className="bg-white/[0.04] border border-white/10 hover:border-brand-gold/40 rounded-2xl p-4 transition-all text-center group"

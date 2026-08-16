@@ -64,6 +64,7 @@ export default function AdminEvents() {
   const [submissions, setSubmissions] = useState([]);
   const [activeTab, setActiveTab] = useState('photos'); // 'photos' | 'upload' | 'proofing' | 'settings'
   const [photosLoading, setPhotosLoading] = useState(false);
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail' for phone screens
 
   // Create Event Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -151,6 +152,7 @@ export default function AdminEvents() {
   // Handle Event Selection
   const handleSelectEvent = (evt) => {
     setSelectedEvent(evt);
+    setMobileView('detail');
     setSearchParams({ select: evt.id });
   };
 
@@ -316,11 +318,11 @@ export default function AdminEvents() {
     >
       <div className="grid lg:grid-cols-12 gap-6 sm:gap-8">
         {/* =========================================================================
-            1. LEFT PANEL: EVENTS LIST
+            1. LEFT PANEL: EVENTS LIST (Hidden on mobile when an event is selected)
             ========================================================================= */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl">
-            <h2 className="font-serif text-lg text-white mb-4">All Client Vaults ({events.length})</h2>
+        <div className={`${mobileView === 'detail' && selectedEvent ? 'hidden lg:block' : 'block'} lg:col-span-4 space-y-4`}>
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-4 sm:p-5 shadow-xl">
+            <h2 className="font-serif text-base sm:text-lg text-white mb-3 sm:mb-4">All Client Vaults ({events.length})</h2>
 
             {loading ? (
               <p className="text-xs text-brand-muted py-6 text-center">Loading client vaults...</p>
@@ -334,7 +336,7 @@ export default function AdminEvents() {
                     <div
                       key={evt.id}
                       onClick={() => handleSelectEvent(evt)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                      className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-brand-gold/15 border-brand-gold shadow-lg shadow-brand-gold/10'
                           : 'bg-black/20 border-white/5 hover:border-white/20'
@@ -374,9 +376,18 @@ export default function AdminEvents() {
         {/* =========================================================================
             2. RIGHT PANEL: SELECTED EVENT WORKSPACE
             ========================================================================= */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className={`${mobileView === 'list' && selectedEvent ? 'hidden lg:block' : 'block'} lg:col-span-8 space-y-6`}>
           {selectedEvent ? (
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 shadow-xl">
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-4 sm:p-8 shadow-xl">
+              {/* Mobile Back Button */}
+              <button
+                type="button"
+                onClick={() => setMobileView('list')}
+                className="lg:hidden mb-4 px-3 py-1.5 rounded-full bg-white/10 text-xs text-brand-gold font-semibold flex items-center gap-1.5 hover:bg-white/20 transition-colors w-fit"
+              >
+                <FaChevronLeft size={10} /> Back to All Vaults
+              </button>
+
               {/* Event Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
                 <div>

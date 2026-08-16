@@ -464,7 +464,7 @@ export default function AdminCrew() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-brand-muted font-light mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-brand-muted font-light mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <span>📞 {member.phone}</span>
                     <span>•</span>
                     <span>📧 {member.email}</span>
@@ -473,7 +473,7 @@ export default function AdminCrew() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
                   {member.phone && (
                     <a
                       href={`https://wa.me/${member.phone.replace(/\D/g, '')}`}
