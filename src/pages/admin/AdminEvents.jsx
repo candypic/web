@@ -472,6 +472,10 @@ export default function AdminEvents() {
                             src={p.public_url}
                             alt={p.filename}
                             loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = 'https://images.unsplash.com/photo-1519741497674-611481863552?w=500&auto=format&fit=crop&q=60';
+                            }}
                             className="w-full h-full object-cover"
                           />
 

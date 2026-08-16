@@ -24,69 +24,84 @@ async function authHeader() {
 }
 
 // =========================================================================
-// 1. Cloudflare R2 Signed Uploads
+// 1. Storage Upload Engine (Cloudflare R2 + Supabase Storage Fallback)
 // =========================================================================
 
-export async function getSignedUpload(file, folder = 'gallery') {
-  try {
-    const headers = await authHeader();
-    const res = await fetch(`${FUNCTIONS_URL}/r2-sign`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({
-        action: 'upload',
-        filename: `${folder}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`,
-        contentType: file.type || 'image/jpeg',
-      }),
-    });
-    if (!res.ok) {
-      const msg = await res.text().catch(() => '');
-      throw new Error(`R2 signing failed (${res.status}): ${msg}`);
-    }
-    return res.json(); // { uploadUrl, key, publicUrl }
-  } catch (err) {
-    console.warn('R2 edge function unavailable, using client direct key', err);
-    // Fallback: Use direct public URL or data URL if edge function not yet configured
-    const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name}`;
-    const publicUrl = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${key}` : URL.createObjectURL(file);
-    return {
-      uploadUrl: null,
-      key,
-      publicUrl,
-      fallback: true,
-    };
-  }
-}
-
-/**
- * Upload single file to R2 with progress feedback
- */
 export async function uploadFileToR2(file, folder = 'gallery', onProgress) {
-  const { uploadUrl, key, publicUrl, fallback } = await getSignedUpload(file, folder);
+  const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${cleanName}`;
+  const bucketName = folder.startsWith('events') ? 'event-photos' : 'gallery';
 
-  if (uploadUrl && !fallback) {
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', uploadUrl);
-      if (file.type) xhr.setRequestHeader('Content-Type', file.type);
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
+  // 1. First Attempt: Cloudflare R2 presigned upload if r2-sign edge function is active
+  if (FUNCTIONS_URL) {
+    try {
+      const headers = await authHeader();
+      const res = await fetch(`${FUNCTIONS_URL}/r2-sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          action: 'upload',
+          filename: key,
+          contentType: file.type || 'image/jpeg',
+        }),
+      });
+
+      if (res.ok) {
+        const { uploadUrl, key: r2Key, publicUrl } = await res.json();
+        if (uploadUrl) {
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl);
+            if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable && onProgress) {
+                onProgress(Math.round((e.loaded / e.total) * 100));
+              }
+            };
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error(`R2 status ${xhr.status}`));
+            };
+            xhr.onerror = () => reject(new Error('R2 Network error'));
+            xhr.send(file);
+          });
+
+          const finalUrl = publicUrl || (R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${r2Key}` : r2Key);
+          return { key: r2Key, publicUrl: finalUrl };
         }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error(`R2 Upload failed with status ${xhr.status}`));
-      };
-      xhr.onerror = () => reject(new Error('Network error during R2 upload.'));
-      xhr.send(file);
-    });
-  } else if (onProgress) {
-    onProgress(100);
+      }
+    } catch (r2Err) {
+      console.warn('R2 edge function skipped, using Supabase Storage:', r2Err);
+    }
   }
 
-  const finalUrl = publicUrl || (R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${key}` : key);
-  return { key, publicUrl: finalUrl };
+  // 2. Second Attempt (Rock Solid): Supabase Storage
+  try {
+    const { data, error: uploadErr } = await supabase.storage
+      .from(bucketName)
+      .upload(key, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadErr) {
+      // If bucket doesn't exist, try default 'gallery'
+      const { data: fbData, error: fbErr } = await supabase.storage
+        .from('gallery')
+        .upload(key, file, { cacheControl: '3600', upsert: true });
+
+      if (fbErr) throw fbErr;
+    }
+
+    const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(key);
+    if (onProgress) onProgress(100);
+    return { key, publicUrl: urlData.publicUrl };
+  } catch (storageErr) {
+    console.error('Supabase storage upload error:', storageErr);
+    throw new Error(
+      `Upload failed: ${storageErr.message || 'Please create the storage bucket in Supabase.'}`
+    );
+  }
 }
 
 // =========================================================================

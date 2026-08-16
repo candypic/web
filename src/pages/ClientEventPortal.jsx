@@ -598,6 +598,10 @@ export default function ClientEventPortal() {
                     src={photo.public_url}
                     alt={photo.filename}
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80';
+                    }}
                     className="w-full h-auto object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                   />
 
