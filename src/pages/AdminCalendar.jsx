@@ -8,6 +8,7 @@ import {
   endOfWeek,
   eachDayOfInterval,
   isSameDay,
+  isSameMonth,
   addMonths,
   subMonths,
   isWithinInterval,
@@ -320,15 +321,15 @@ export default function AdminCalendar() {
     >
       <div className="max-w-6xl mx-auto space-y-6">
         {/* =========================================================================
-            CALENDAR GRID CONTAINER
+            CALENDAR GRID CONTAINER (Clean, viewport-optimized, no overflow scrolling)
             ========================================================================= */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-4 sm:p-7 shadow-2xl">
+        <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-2xl">
           {/* Weekday Headers */}
-          <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-1.5 text-center">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
               <div
                 key={d}
-                className={`text-[11px] font-bold uppercase tracking-wider py-2 ${
+                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider py-1 ${
                   i === 0 || i === 6 ? 'text-brand-red' : 'text-brand-muted'
                 }`}
               >
@@ -338,9 +339,10 @@ export default function AdminCalendar() {
           </div>
 
           {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {calendarDays.map((day) => {
               const dayEvents = getEventsForDay(day);
+              const isCurrentMonth = isSameMonth(day, currentDate);
               const isToday = isSameDay(day, new Date());
               const isSelected = selectedDate && isSameDay(day, selectedDate);
               const isBlocked = dayEvents.some((e) => e.event_type === 'Block' || e.client_name === 'BLOCKED');
@@ -350,52 +352,58 @@ export default function AdminCalendar() {
                 <div
                   key={day.toISOString()}
                   onClick={() => handleDateClick(day)}
-                  className={`min-h-[80px] sm:min-h-[105px] p-2 sm:p-2.5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between relative group ${
+                  className={`min-h-[58px] sm:min-h-[78px] md:min-h-[92px] p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between relative group ${
+                    !isCurrentMonth ? 'opacity-30 bg-white/[0.01] border-transparent' : ''
+                  } ${
                     isSelected
-                      ? 'border-brand-gold bg-brand-gold/15 ring-2 ring-brand-gold'
+                      ? 'border-brand-gold bg-brand-gold/15 ring-2 ring-brand-gold z-10'
                       : isBlocked
-                      ? 'bg-brand-red/10 border-brand-red/30 hover:border-brand-red/60'
+                      ? 'bg-brand-red/15 border-brand-red/40 hover:border-brand-red/80'
                       : hasBooking
-                      ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60'
+                      ? 'bg-emerald-500/15 border-emerald-500/40 hover:border-emerald-500/80'
                       : isToday
-                      ? 'bg-white/10 border-white/30'
-                      : 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/5'
+                      ? 'bg-white/10 border-white/40'
+                      : 'bg-white/[0.02] border-white/5 hover:border-white/25 hover:bg-white/5'
                   }`}
                 >
-                  {/* Day Number */}
+                  {/* Day Number Header */}
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs sm:text-sm font-semibold rounded-full w-6 h-6 flex items-center justify-center ${
+                      className={`text-[11px] sm:text-xs font-semibold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center ${
                         isToday
                           ? 'bg-brand-gold text-brand-dark font-bold'
                           : isSelected
-                          ? 'text-brand-gold'
-                          : 'text-white/80'
+                          ? 'text-brand-gold font-bold'
+                          : isCurrentMonth
+                          ? 'text-white/90'
+                          : 'text-white/40'
                       }`}
                     >
                       {format(day, 'd')}
                     </span>
 
-                    {/* Quick indicator badge */}
-                    {isBlocked && (
-                      <span className="w-2 h-2 rounded-full bg-brand-red shrink-0" title="Date Blocked" />
-                    )}
-                    {hasBooking && !isBlocked && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Shoot Booked" />
-                    )}
+                    {/* Status Indicator Dots */}
+                    <div className="flex items-center gap-1">
+                      {isBlocked && (
+                        <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-brand-red shrink-0" title="Blocked" />
+                      )}
+                      {hasBooking && !isBlocked && (
+                        <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 shrink-0" title="Booked" />
+                      )}
+                    </div>
                   </div>
 
                   {/* Day Events Preview Chips */}
-                  <div className="space-y-1 mt-1 overflow-hidden">
+                  <div className="space-y-0.5 sm:space-y-1 mt-0.5 overflow-hidden">
                     {dayEvents.slice(0, 2).map((ev) => {
                       const isBlk = ev.event_type === 'Block' || ev.client_name === 'BLOCKED';
                       return (
                         <div
                           key={ev.id}
-                          className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded truncate font-medium ${
+                          className={`text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded truncate font-medium ${
                             isBlk
-                              ? 'bg-brand-red/20 text-red-200 border border-brand-red/30'
-                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              ? 'bg-brand-red/30 text-red-200 border border-brand-red/40'
+                              : 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
                           }`}
                         >
                           {isBlk ? '🚫 Blocked' : ev.client_name}
@@ -403,7 +411,7 @@ export default function AdminCalendar() {
                       );
                     })}
                     {dayEvents.length > 2 && (
-                      <span className="text-[9px] text-brand-gold font-mono block">
+                      <span className="text-[8px] sm:text-[9px] text-brand-gold font-mono block leading-none">
                         +{dayEvents.length - 2} more
                       </span>
                     )}

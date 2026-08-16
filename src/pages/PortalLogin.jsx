@@ -4,7 +4,6 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FaLock, FaKey, FaArrowRight, FaArrowLeft, FaHeart, FaShieldAlt, FaCamera } from 'react-icons/fa';
 import { getClientEventBySlug } from '../lib/galleryApi';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 
 export default function PortalLogin() {
   const { slug: routeSlug } = useParams();
@@ -220,8 +219,6 @@ export default function PortalLogin() {
           </div>
         </motion.div>
       </main>
-
-      <Footer />
     </div>
   );
 }

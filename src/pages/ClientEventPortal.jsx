@@ -31,7 +31,6 @@ import {
   downloadImage,
 } from '../lib/galleryApi';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 
 const ALL_CATEGORY = 'All';
 
@@ -1046,7 +1045,10 @@ export default function ClientEventPortal() {
         )}
       </AnimatePresence>
 
-      <Footer />
+      {/* Minimal Client Vault End Signature (No public marketing footer) */}
+      <div className="py-12 text-center text-xs text-brand-muted/40 font-light tracking-widest uppercase">
+        Candy Pic • Private Memory Vault
+      </div>
     </div>
   );
 }
