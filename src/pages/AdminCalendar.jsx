@@ -649,18 +649,40 @@ export default function AdminCalendar() {
                                 </button>
                               )}
 
-                              {ev.client_phone && (
-                                <a
-                                  href={`https://wa.me/${ev.client_phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                                    `Hi ${ev.client_name}, this is Chandan from Candy Pic regarding your booking on ${ev.booking_date}.`
-                                  )}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="rounded-full px-3.5 py-1.5 bg-[#25D366] text-white text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5"
-                                >
-                                  <FaWhatsapp size={13} /> WhatsApp
-                                </a>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {ev.assigned_to && (
+                                  <a
+                                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                                      `📸 *Candy Pic — Shoot Assignment*\n\n` +
+                                      `👤 *Assigned Lead:* ${ev.assigned_to}\n` +
+                                      `💍 *Event:* ${ev.event_type || 'Wedding Photography'}\n` +
+                                      `🗓 *Date:* ${ev.booking_date}\n` +
+                                      `👥 *Client:* ${ev.client_name} (${ev.client_phone || 'No phone'})\n` +
+                                      (ev.additional_info ? `📝 *Details:* ${ev.additional_info}\n` : '') +
+                                      `\nPlease confirm your availability with Chandan.`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-full px-3 py-1.5 bg-brand-gold/15 border border-brand-gold/30 text-brand-gold hover:bg-brand-gold hover:text-brand-dark text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                                    title="Send assignment brief to lead photographer"
+                                  >
+                                    <FaShareAlt size={11} /> Notify Lead
+                                  </a>
+                                )}
+
+                                {ev.client_phone && (
+                                  <a
+                                    href={`https://wa.me/${ev.client_phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                      `Hi ${ev.client_name}, this is Chandan from Candy Pic regarding your booking on ${ev.booking_date}.`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-full px-3.5 py-1.5 bg-[#25D366] text-white text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+                                  >
+                                    <FaWhatsapp size={13} /> Client WhatsApp
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -863,15 +885,41 @@ export default function AdminCalendar() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
-                      Assigned Crew / Lead
+                      Assign Lead / Team Member
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Chandan Naik + Drone Cam"
-                      value={formData.assignedTeam}
-                      onChange={(e) => setFormData({ ...formData, assignedTeam: e.target.value })}
-                      className="w-full rounded-xl bg-black/40 border border-white/15 px-3.5 py-2 text-xs text-white outline-none focus:border-brand-gold"
-                    />
+                    <select
+                      value={
+                        ['Chandan Naik', 'Vikram Naik', 'Rahul Naik', 'Drone Operator / Pilot', 'Traditional Cam Lead'].includes(formData.assignedTeam)
+                          ? formData.assignedTeam
+                          : 'Custom'
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'Custom') {
+                          setFormData({ ...formData, assignedTeam: '' });
+                        } else {
+                          setFormData({ ...formData, assignedTeam: val });
+                        }
+                      }}
+                      className="w-full rounded-xl bg-brand-deep border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
+                    >
+                      <option value="Chandan Naik">Chandan Naik (Studio Lead)</option>
+                      <option value="Vikram Naik">Vikram Naik (Candid &amp; Drone)</option>
+                      <option value="Rahul Naik">Rahul Naik (Cinematographer)</option>
+                      <option value="Drone Operator / Pilot">Drone Operator / Pilot</option>
+                      <option value="Traditional Cam Lead">Traditional Cam Lead</option>
+                      <option value="Custom">+ Custom / Freelance Crew...</option>
+                    </select>
+
+                    {(!['Chandan Naik', 'Vikram Naik', 'Rahul Naik', 'Drone Operator / Pilot', 'Traditional Cam Lead'].includes(formData.assignedTeam) || formData.assignedTeam === '') && (
+                      <input
+                        type="text"
+                        placeholder="Enter Photographer / Crew Name"
+                        value={formData.assignedTeam}
+                        onChange={(e) => setFormData({ ...formData, assignedTeam: e.target.value })}
+                        className="w-full mt-2 rounded-xl bg-black/40 border border-white/15 px-3.5 py-1.5 text-xs text-white outline-none focus:border-brand-gold"
+                      />
+                    )}
                   </div>
 
                   <div>
