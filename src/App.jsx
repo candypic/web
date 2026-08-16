@@ -192,6 +192,56 @@ function RealtimePushManager() {
           } catch (e) {}
         }
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crew_profiles' }, async (payload) => {
+        const newProfile = payload.new;
+        console.log('[CandyPic Push Listener] 🔔 crew_profiles UPDATE received:', newProfile);
+        if (newProfile && newProfile.status === 'approved') {
+          const targetName = (newProfile.name || '').toLowerCase().trim();
+          const targetEmail = (newProfile.email || '').toLowerCase().trim();
+
+          const matchesMe =
+            (currentName && (targetName.includes(currentName) || currentName.includes(targetName))) ||
+            (currentEmail && (targetEmail.includes(currentEmail) || currentEmail.includes(targetEmail))) ||
+            (!currentEmail && !currentName);
+
+          if (!matchesMe) {
+            console.log(`[CandyPic Push Listener] ⏭️ Approval update is for ${targetName}. Skipping on this device.`);
+            return;
+          }
+
+          console.log('[CandyPic Push Listener] 🎯 Profile approved via database update! Triggering alert...');
+
+          // Save credentials locally
+          try {
+            localStorage.setItem('candy_crew_name', newProfile.name);
+            localStorage.setItem('candy_crew_email', newProfile.email);
+          } catch (e) {}
+
+          if (Notification.permission === 'granted') {
+            try {
+              if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.ready;
+                if (reg && reg.showNotification) {
+                  await reg.showNotification('🎉 Profile Approved! Welcome to Crew', {
+                    body: `Hi ${newProfile.name}! Chandan approved your profile as ${newProfile.role}. Tap to open your schedule.`,
+                    icon: '/logo-nonsquare.png',
+                    badge: '/logo-nonsquare.png',
+                    data: { url: `/crew/calendar?email=${encodeURIComponent(newProfile.email)}` },
+                    vibrate: [300, 100, 300],
+                  });
+                  return;
+                }
+              }
+              new Notification('🎉 Profile Approved!', {
+                body: `Hi ${newProfile.name}! Chandan approved your profile as ${newProfile.role}.`,
+                icon: '/logo-nonsquare.png',
+              });
+            } catch (e) {
+              console.error('[CandyPic Push Listener] Error triggering approval notification:', e);
+            }
+          }
+        }
+      })
       .subscribe();
 
     return () => {

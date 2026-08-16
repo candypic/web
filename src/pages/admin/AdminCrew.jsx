@@ -22,6 +22,7 @@ import {
   listCrewMembers,
   approveCrewMember,
   rejectCrewMember,
+  createAdminNotification,
 } from '../../lib/galleryApi';
 
 export default function AdminCrew() {
@@ -76,6 +77,14 @@ export default function AdminCrew() {
       // Dispatch targeted push notification to the approved applicant
       if (targetMember) {
         try {
+          await createAdminNotification({
+            title: '🎉 Profile Approved! Welcome to Crew',
+            message: `Hi ${targetMember.name}! Chandan approved your crew profile as ${targetMember.role}.`,
+            type: 'general',
+            link: `/crew/calendar?email=${encodeURIComponent(targetMember.email)}`,
+            metadata: { assigned_to: targetMember.name, email: targetMember.email },
+          });
+
           const broadcastChannel = supabase.channel('studio-live-events', {
             config: { broadcast: { self: false } },
           });
