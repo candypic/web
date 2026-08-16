@@ -4,7 +4,6 @@ import { AnimatePresence } from 'framer-motion';
 import { supabase } from './lib/supabaseClient';
 
 // Public Pages
-import Home from './pages/Home';
 import Quotation from './pages/Quotation';
 import Gallery from './pages/Gallery';
 
@@ -26,6 +25,7 @@ import CrewCalendar from './pages/crew/CrewCalendar';
 import Preloader from './components/Preloader';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ProtectedRoute from './components/ProtectedRoute';
+import HomeGate from './components/HomeGate';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { showCrewNotification } from './lib/notifications';
 
@@ -205,7 +205,7 @@ function App() {
             <div className="font-sans antialiased bg-brand-dark text-brand-text min-h-screen animate-fade-in">
               <Routes>
                 {/* ── Public Site ── */}
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={<HomeGate />} />
                 <Route path="/quotation" element={<Quotation />} />
                 <Route path="/gallery" element={<Gallery />} />
 

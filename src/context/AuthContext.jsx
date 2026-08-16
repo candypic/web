@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+const SUPER_ADMIN_EMAILS = ['chandan@candypic.com'];
+
 const AuthContext = createContext({
   session: null,
   user: null,
@@ -8,6 +10,7 @@ const AuthContext = createContext({
   isSuperAdmin: false,
   isAdmin: false,
   isCrew: false,
+  isApprovedCrew: false,
   loading: true,
   signIn: async () => {},
   signOut: async () => {},
@@ -42,6 +45,16 @@ export function AuthProvider({ children }) {
       setSession(data.session);
       if (data.session?.user?.email) {
         await fetchProfile(data.session.user.email);
+      } else {
+        // Crew members never get a real Supabase Auth session — they're
+        // identified on this device via the email saved to localStorage
+        // at registration/approval. Resolve that so the app knows, on
+        // every launch, whether this device belongs to approved crew.
+        let localEmail = '';
+        try {
+          localEmail = localStorage.getItem('candy_crew_email') || '';
+        } catch (e) {}
+        if (localEmail) await fetchProfile(localEmail);
       }
       setLoading(false);
     });
@@ -59,12 +72,15 @@ export function AuthProvider({ children }) {
   }, []);
 
   const userEmail = session?.user?.email?.toLowerCase().trim() || '';
-  const isSuperAdmin =
-    userEmail === 'chandan@candypic.com' ||
-    userEmail === 'admin@candypic.in' ||
-    userEmail === 'prajnaprabhu9@gmail.com';
+  const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(userEmail);
   const isAdmin = isSuperAdmin || crewProfile?.role === 'Admin' || crewProfile?.role === 'Studio Lead';
   const isCrew = Boolean(crewProfile) || !isSuperAdmin;
+  // True once this device is recognized as an approved (non-admin) crew
+  // member — regardless of whether they ever hold a real login session.
+  const isApprovedCrew =
+    Boolean(crewProfile) &&
+    crewProfile.status === 'approved' &&
+    !SUPER_ADMIN_EMAILS.includes((crewProfile.email || '').toLowerCase().trim());
 
   const value = {
     session,
@@ -73,6 +89,7 @@ export function AuthProvider({ children }) {
     isSuperAdmin,
     isAdmin,
     isCrew,
+    isApprovedCrew,
     loading,
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signOut: () => supabase.auth.signOut(),

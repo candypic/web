@@ -23,7 +23,10 @@ export default defineConfig({
         background_color: '#0b262d',
         display: 'standalone', // CRITICAL: Removes browser address bar
         orientation: 'portrait',
-        start_url: '/calendar', // Tries to open directly to calendar
+        // "/" routes through HomeGate, which sends an approved crew device
+        // straight to /crew/calendar, the studio admin to /admin/dashboard,
+        // and anyone else to the public site.
+        start_url: '/',
         icons: [
           {
             src: '/logo-square-black.jpg', // Ensure you have this image in /public
