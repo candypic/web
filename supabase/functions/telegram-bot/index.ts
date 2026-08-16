@@ -70,7 +70,7 @@ async function handleDebugCommand() {
 }
 
 // ------------------------------------------------------------------
-// 🔔 DATABASE NOTIFICATION HANDLER
+// 🔔 DATABASE NOTIFICATION HANDLER (Month, Day, Event Name, Client Details)
 // ------------------------------------------------------------------
 async function handleDatabaseNotification(req: Request) {
     try {
@@ -79,38 +79,78 @@ async function handleDatabaseNotification(req: Request) {
       const booking = payload.record 
       if (!booking) return new Response('No record', { status: 400 })
 
-      // Check Clashes
-      const { data: clashData } = await supabase.from('bookings').select('client_name, assigned_to').eq('booking_date', booking.booking_date).eq('status', 'confirmed').maybeSingle()
+      // Check Clashes on the same date
+      const { data: clashData } = await supabase
+        .from('bookings')
+        .select('client_name, assigned_to')
+        .eq('booking_date', booking.booking_date)
+        .eq('status', 'confirmed')
+        .neq('id', booking.id)
+        .maybeSingle()
 
-      const eventType = booking.event_type || "General Inquiry";
-      let header = "<b>✨ NEW ENQUIRY ✨</b>";
-      let icon = "📷";
+      // Format Date nicely: e.g. "Sunday, 24 November 2026"
+      let formattedDate = booking.booking_date;
+      let dayOfWeek = "";
+      let monthName = "";
+      try {
+        const [year, month, day] = booking.booking_date.split('-').map(Number);
+        const d = new Date(year, month - 1, day);
+        dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+        monthName = d.toLocaleDateString('en-US', { month: 'long' });
+        formattedDate = `${dayOfWeek}, ${day} ${monthName} ${year}`;
+      } catch (e) {
+        console.warn("Date format error:", e);
+      }
+
+      const eventType = booking.event_type || "Wedding Photography";
+      let header = "📸 <b>NEW BOOKING ALERT</b>";
+      let icon = "💍";
       
-      if (eventType.includes("Full Wedding")) { header = "<b>💎 PREMIUM PACKAGE 💎</b>"; icon = "💍"; }
-      else if (eventType.includes("Custom")) { header = "<b>🛠 CUSTOM REQUEST 🛠</b>"; icon = "📝"; }
+      if (eventType.toLowerCase().includes("pre-wedding")) { icon = "🌅"; }
+      else if (eventType.toLowerCase().includes("haldi") || eventType.toLowerCase().includes("mehendi")) { icon = "💛"; }
+      else if (eventType.toLowerCase().includes("engagement")) { icon = "💍"; }
+      else if (eventType.toLowerCase().includes("block")) { header = "🚫 <b>DATE BLOCKED</b>"; icon = "🔒"; }
 
-      let message = `${header}\n`
+      let message = `${header}\n━━━━━━━━━━━━━━━━━━━━\n`
       if (clashData) {
           const assignee = clashData.assigned_to ? clashData.assigned_to : "Unassigned"
-          message += `\n🚨 <b>CLASH ALERT:</b> Date booked for ${clashData.client_name} (${assignee}).\n`
+          message += `🚨 <b>CLASH WARNING:</b> Date already booked for <i>${clashData.client_name}</i> (${assignee})\n\n`
       }
       
-      message += `\n👤 <b>Client:</b> ${booking.client_name}`
-      message += `\n📞 <b>Phone:</b> <code>${booking.client_phone}</code>`
-      message += `\n🗓 <b>Date:</b> ${booking.booking_date}`
-      if(booking.booking_end_date && booking.booking_end_date !== booking.booking_date) {
-          message += ` to ${booking.booking_end_date}`
+      message += `${icon} <b>Event:</b> <b>${eventType}</b>\n`
+      message += `🗓 <b>Date:</b> <code>${formattedDate}</code>\n`
+      if (booking.booking_end_date && booking.booking_end_date !== booking.booking_date) {
+          message += `🏁 <b>End Date:</b> <code>${booking.booking_end_date}</code>\n`
       }
-      message += `\n${icon} <b>Details:</b> ${eventType}`
-      message += `\n\n<i>Select an action below:</i>`
+      message += `👤 <b>Client:</b> <b>${booking.client_name}</b>\n`
+      message += `📞 <b>Phone:</b> <code>${booking.client_phone || 'N/A'}</code>\n`
+      
+      if (booking.additional_info) {
+          message += `📝 <b>Notes / Venue:</b> <i>${booking.additional_info}</i>\n`
+      }
+      if (booking.assigned_to) {
+          message += `👥 <b>Assigned Team:</b> ${booking.assigned_to}\n`
+      }
 
+      message += `\n<i>Tap an action below to manage:</i>`
+
+      const cleanPhone = (booking.client_phone || '').replace(/\D/g, '');
       const keyboard = {
-        inline_keyboard: [[ { text: "✅ Approve / Assign", callback_data: `assign_${booking.id}` }, { text: "❌ Reject", callback_data: `reject_${booking.id}` } ]]
+        inline_keyboard: [
+          [
+            { text: "✅ Approve / Assign", callback_data: `assign_${booking.id}` },
+            { text: "❌ Reject", callback_data: `reject_${booking.id}` }
+          ],
+          ...(cleanPhone ? [[
+            { text: "💬 Chat on WhatsApp", url: `https://wa.me/${cleanPhone}?text=Hi%20${encodeURIComponent(booking.client_name)},%20this%20is%20Chandan%20from%20Candy%20Pic%20regarding%20your%20booking%20on%20${encodeURIComponent(booking.booking_date)}.` }
+          ]] : [])
+        ]
       }
 
       await sendMessage(CHAT_ID, message, keyboard)
       return new Response('Notification Sent', { status: 200 })
     } catch (err) {
+      console.error("handleDatabaseNotification error:", err)
       return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
     }
 }
@@ -413,13 +453,37 @@ async function sendPushToPhone(phoneNumber: string, messageBody: string) {
 // ------------------------------------------------------------------
 async function handleCalendarCommand(chatId: number) {
     const today = new Date().toISOString().split('T')[0]
-    const { data: bookings } = await supabase.from('bookings').select('*').eq('status', 'confirmed').gte('booking_date', today).order('booking_date').limit(10)
-    let msg = "<b>📅 UPCOMING SCHEDULE</b>\n\n"
-    if (!bookings || bookings.length === 0) msg += "<i>No upcoming bookings.</i>"
-    else {
-        bookings.forEach(b => {
-            const assignee = b.assigned_to || "Unassigned"
-            msg += `🗓 <code>${b.booking_date}</code>\n👤 ${b.client_name} → <b>${assignee}</b>\n──────────────\n`
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('status', 'confirmed')
+      .gte('booking_date', today)
+      .order('booking_date')
+      .limit(15)
+
+    let msg = "<b>📅 UPCOMING CANDY PIC SCHEDULE</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+    if (!bookings || bookings.length === 0) {
+      msg += "<i>No upcoming shoots scheduled.</i>"
+    } else {
+        bookings.forEach((b, idx) => {
+            let formattedDate = b.booking_date;
+            try {
+              const [year, month, day] = b.booking_date.split('-').map(Number);
+              const d = new Date(year, month - 1, day);
+              const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+              const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'short' });
+              formattedDate = `${monthName} ${day} (${dayOfWeek})`;
+            } catch (e) {}
+
+            const isBlk = b.event_type === 'Block' || b.client_name === 'BLOCKED';
+            const assignee = b.assigned_to ? `👤 <i>${b.assigned_to}</i>` : "<i>Unassigned</i>";
+            const eventTitle = isBlk ? "🚫 BLOCKED" : (b.event_type || "Wedding Photography");
+
+            msg += `<b>${idx + 1}. 🗓 ${formattedDate}</b>\n`
+            msg += `   💍 <b>${eventTitle}</b>\n`
+            msg += `   👥 Client: <b>${b.client_name}</b>\n`
+            if (!isBlk) msg += `   📸 Team: ${assignee}\n`
+            msg += `────────────────────\n`
         })
     }
     await sendMessage(chatId, msg)
