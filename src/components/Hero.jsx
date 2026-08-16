@@ -87,19 +87,13 @@ const Hero = () => {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.15, ease: 'easeOut' }}
-          className="flex flex-col items-center gap-2 mb-6"
+          className="flex flex-col items-center mb-6"
         >
-          {/* Rotating word — single clean line with height locking */}
-          <div className="h-12 sm:h-16 md:h-24 lg:h-28 flex items-center justify-center">
-            <RotatingText
-              texts={words}
-              rotationInterval={3500}
-              mainClassName="font-serif font-semibold text-4xl sm:text-5xl md:text-7xl lg:text-8xl text-transparent bg-clip-text bg-gradient-to-r from-brand-gold via-brand-gold-soft to-brand-gold text-shadow-soft"
-            />
-          </div>
+          {/* Rotating word — rock solid gold typography */}
+          <RotatingText texts={words} rotationInterval={3200} />
 
           {/* Static line completing the lockup */}
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl lg:text-7xl text-white leading-tight text-shadow-soft">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl lg:text-7xl text-white leading-tight text-shadow-soft mt-1">
             Stories, Beautifully Told
           </h1>
         </motion.div>

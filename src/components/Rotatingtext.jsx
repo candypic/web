@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const RotatingText = ({
-  texts = ['Cinematic', 'Wedding', 'Pre-Wedding', 'Haldi', 'Candid'],
-  rotationInterval = 3500,
-  mainClassName = '',
+  texts = ['Wedding', 'Pre-Wedding', 'Cinematic', 'Haldi', 'Candid'],
+  rotationInterval = 3200,
+  className = '',
 }) => {
   const [index, setIndex] = useState(0);
 
@@ -16,18 +16,18 @@ const RotatingText = ({
   }, [texts.length, rotationInterval]);
 
   return (
-    <div className={`relative inline-flex items-center justify-center overflow-hidden min-h-[1.15em] ${mainClassName}`}>
+    <div className="relative inline-flex items-center justify-center h-14 sm:h-20 md:h-24 lg:h-28 overflow-hidden px-4">
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
           key={texts[index]}
-          initial={{ y: '100%', opacity: 0, filter: 'blur(4px)' }}
-          animate={{ y: '0%', opacity: 1, filter: 'blur(0px)' }}
-          exit={{ y: '-100%', opacity: 0, filter: 'blur(4px)' }}
+          initial={{ opacity: 0, y: 35 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -35 }}
           transition={{
-            duration: 0.55,
-            ease: [0.22, 1, 0.36, 1],
+            duration: 0.45,
+            ease: [0.16, 1, 0.3, 1],
           }}
-          className="inline-block whitespace-nowrap text-transparent bg-clip-text bg-gradient-to-r from-brand-gold via-brand-gold-soft to-brand-gold text-shadow-soft"
+          className={`font-serif font-semibold text-4xl sm:text-5xl md:text-7xl lg:text-8xl text-brand-gold whitespace-nowrap select-none drop-shadow-[0_2px_15px_rgba(212,175,55,0.35)] ${className}`}
         >
           {texts[index]}
         </motion.span>
