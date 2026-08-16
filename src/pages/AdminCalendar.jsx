@@ -35,6 +35,7 @@ import {
   FaShieldAlt,
   FaFilter,
   FaShareAlt,
+  FaUserPlus,
 } from 'react-icons/fa';
 import BottomDrawer from '../components/BottomDrawer';
 import AdminLayout from '../components/admin/AdminLayout';
