@@ -149,18 +149,54 @@ export default function AdminCrew() {
       (filterRole === 'all' || c.role === filterRole)
   );
 
+  const handleTestBroadcast = async () => {
+    console.log('[CandyPic Test] Triggering test broadcast to studio-live-events...');
+    const testChannel = supabase.channel('studio-live-events', {
+      config: { broadcast: { self: true } },
+    });
+    testChannel.subscribe(async (status) => {
+      console.log('[CandyPic Test] Channel status:', status);
+      if (status === 'SUBSCRIBED') {
+        const res = await testChannel.send({
+          type: 'broadcast',
+          event: 'shoot-assigned',
+          payload: {
+            title: '📸 Live Shoot Assignment Alert!',
+            body: 'This is a live test broadcast! Your device is successfully connected to Candy Pic Studio alerts.',
+            assignedTeam: 'You',
+            date: new Date().toISOString().split('T')[0],
+            client: 'Test Couple',
+            venue: 'Gokarna Beach',
+          },
+        });
+        console.log('[CandyPic Test] Broadcast send result:', res);
+        alert('✅ Broadcast dispatched! Check your notification bar / lock-screen.');
+      }
+    });
+  };
+
   return (
     <AdminLayout
       title="Crew Roster &amp; Approvals"
       subtitle="Review incoming team registrations and manage active studio crew"
       actions={
-        <button
-          type="button"
-          onClick={() => setIsAddModalOpen(true)}
-          className="rounded-full px-5 py-2 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2 cursor-pointer"
-        >
-          <FaUserPlus size={11} /> Add Crew Member
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleTestBroadcast}
+            className="rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-medium text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Dispatch a test broadcast to all connected phones/devices"
+          >
+            <FaBell size={11} className="text-brand-gold" /> Test Broadcast
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="rounded-full px-5 py-2 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2 cursor-pointer"
+          >
+            <FaUserPlus size={11} /> Add Crew Member
+          </button>
+        </div>
       }
     >
       <div className="space-y-8">

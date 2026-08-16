@@ -32,23 +32,35 @@ function App() {
 
   // Global Realtime Push Listener for Android/iOS PWA devices
   useEffect(() => {
-    if (!('Notification' in window)) return;
+    console.log('[CandyPic Push Listener] Initializing global realtime notification listener...');
+    const hasNotification = typeof Notification !== 'undefined';
+    console.log('[CandyPic Push Listener] Notification API supported:', hasNotification);
+    if (hasNotification) {
+      console.log('[CandyPic Push Listener] Current permission:', Notification.permission);
+    }
 
-    const channel = supabase
-      .channel('studio-live-events')
+    const channel = supabase.channel('studio-live-events', {
+      config: { broadcast: { self: true } },
+    });
+
+    channel
       .on('broadcast', { event: 'shoot-assigned' }, async ({ payload }) => {
-        if (Notification.permission === 'granted') {
+        console.log('[CandyPic Push Listener] 🔔 Incoming broadcast received! Payload:', payload);
+
+        if (hasNotification && Notification.permission === 'granted') {
           try {
             if ('serviceWorker' in navigator) {
               const reg = await navigator.serviceWorker.ready;
+              console.log('[CandyPic Push Listener] ServiceWorker ready instance:', reg);
               if (reg && reg.showNotification) {
-                reg.showNotification(payload.title || '📸 Candy Pic Shoot Assignment', {
+                await reg.showNotification(payload.title || '📸 Candy Pic Shoot Assignment', {
                   body: payload.body || 'You have been assigned to an upcoming wedding shoot.',
                   icon: '/logo-nonsquare.png',
                   badge: '/logo-nonsquare.png',
                   data: { url: '/admin/calendar' },
                   vibrate: [200, 100, 200],
                 });
+                console.log('[CandyPic Push Listener] ✅ ServiceWorker showNotification triggered successfully!');
                 return;
               }
             }
@@ -56,12 +68,17 @@ function App() {
               body: payload.body,
               icon: '/logo-nonsquare.png',
             });
+            console.log('[CandyPic Push Listener] ✅ Window Notification triggered!');
           } catch (e) {
-            console.warn('Realtime push display error:', e);
+            console.error('[CandyPic Push Listener] ❌ Notification display error:', e);
           }
+        } else {
+          console.warn('[CandyPic Push Listener] ⚠️ Cannot show notification. Permission is:', hasNotification ? Notification.permission : 'unsupported');
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[CandyPic Push Listener] Channel studio-live-events subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
