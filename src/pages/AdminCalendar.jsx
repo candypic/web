@@ -38,13 +38,21 @@ import {
 } from 'react-icons/fa';
 import BottomDrawer from '../components/BottomDrawer';
 import AdminLayout from '../components/admin/AdminLayout';
-import { listClientEvents, createClientEvent } from '../lib/galleryApi';
+import {
+  listClientEvents,
+  createClientEvent,
+  listCrewMembers,
+  approveCrewMember,
+  rejectCrewMember,
+} from '../lib/galleryApi';
 import { Link } from 'react-router-dom';
 
 export default function AdminCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState([]);
   const [clientEvents, setClientEvents] = useState([]);
+  const [crewMembers, setCrewMembers] = useState([]);
+  const [isCrewModalOpen, setIsCrewModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'create' | 'block' | 'credentials'
@@ -79,13 +87,15 @@ export default function AdminCalendar() {
 
   // --- 1. FETCH DATA ---
   const fetchData = async () => {
-    const [{ data: bookingsData }, eventsData] = await Promise.all([
+    const [{ data: bookingsData }, eventsData, crewData] = await Promise.all([
       supabase.from('bookings').select('*').order('booking_date', { ascending: true }),
       listClientEvents().catch(() => []),
+      listCrewMembers('all').catch(() => []),
     ]);
 
     if (bookingsData) setBookings(bookingsData);
     if (eventsData) setClientEvents(eventsData);
+    if (crewData) setCrewMembers(crewData);
   };
 
   useEffect(() => {
@@ -100,6 +110,34 @@ export default function AdminCalendar() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const handleApproveCrew = async (id) => {
+    try {
+      setIsLoading(true);
+      await approveCrewMember(id, 'chandan@candypic.com');
+      await fetchData();
+    } catch (err) {
+      alert(`Approval failed: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRejectCrew = async (id) => {
+    if (!confirm('Reject this crew applicant?')) return;
+    try {
+      setIsLoading(true);
+      await rejectCrewMember(id);
+      await fetchData();
+    } catch (err) {
+      alert(`Rejection failed: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const approvedCrew = crewMembers.filter((c) => c.status === 'approved');
+  const pendingCrew = crewMembers.filter((c) => c.status === 'pending');
 
   // --- 2. CALENDAR MATH ---
   const monthStart = startOfMonth(currentDate);
@@ -347,9 +385,24 @@ export default function AdminCalendar() {
   return (
     <AdminLayout
       title="Studio Calendar &amp; Client Access"
-      subtitle="Manage shoot bookings, block dates, and generate client portal credentials"
+      subtitle="Manage shoot bookings, block dates, crew assignments, and client portal credentials"
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          {/* Crew Management & Approvals Button */}
+          <button
+            type="button"
+            onClick={() => setIsCrewModalOpen(true)}
+            className="relative px-3.5 py-1.5 rounded-full bg-brand-gold/15 border border-brand-gold/30 hover:bg-brand-gold hover:text-brand-dark text-brand-gold text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-brand-gold/5"
+            title="Review crew member registrations and approval status"
+          >
+            <FaUserPlus size={11} /> Crew Roster ({approvedCrew.length})
+            {pendingCrew.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-brand-red text-white text-[9px] font-bold animate-pulse">
+                {pendingCrew.length} Pending
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={jumpToday}
@@ -889,7 +942,7 @@ export default function AdminCalendar() {
                     </label>
                     <select
                       value={
-                        ['Chandan Naik', 'Vikram Naik', 'Rahul Naik', 'Drone Operator / Pilot', 'Traditional Cam Lead'].includes(formData.assignedTeam)
+                        approvedCrew.some((c) => c.name === formData.assignedTeam)
                           ? formData.assignedTeam
                           : 'Custom'
                       }
@@ -903,15 +956,15 @@ export default function AdminCalendar() {
                       }}
                       className="w-full rounded-xl bg-brand-deep border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
                     >
-                      <option value="Chandan Naik">Chandan Naik (Studio Lead)</option>
-                      <option value="Vikram Naik">Vikram Naik (Candid &amp; Drone)</option>
-                      <option value="Rahul Naik">Rahul Naik (Cinematographer)</option>
-                      <option value="Drone Operator / Pilot">Drone Operator / Pilot</option>
-                      <option value="Traditional Cam Lead">Traditional Cam Lead</option>
+                      {approvedCrew.map((crew) => (
+                        <option key={crew.id} value={crew.name}>
+                          {crew.name} ({crew.role})
+                        </option>
+                      ))}
                       <option value="Custom">+ Custom / Freelance Crew...</option>
                     </select>
 
-                    {(!['Chandan Naik', 'Vikram Naik', 'Rahul Naik', 'Drone Operator / Pilot', 'Traditional Cam Lead'].includes(formData.assignedTeam) || formData.assignedTeam === '') && (
+                    {(!approvedCrew.some((c) => c.name === formData.assignedTeam) || formData.assignedTeam === '') && (
                       <input
                         type="text"
                         placeholder="Enter Photographer / Crew Name"
@@ -1121,6 +1174,155 @@ export default function AdminCalendar() {
           )}
         </div>
       </BottomDrawer>
+
+      {/* =========================================================================
+          CREW ROSTER & APPROVALS MODAL (SUPER ADMIN: CHANDAN@CANDYPIC.COM)
+          ========================================================================= */}
+      {isCrewModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-brand-dark border border-white/15 rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div>
+                <h3 className="font-serif text-xl text-white">Crew Roster &amp; Approvals</h3>
+                <p className="text-xs text-brand-muted font-light mt-0.5">
+                  Super Admin: <strong>chandan@candypic.com</strong> • Approved members appear in shoot assignment dropdown.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCrewModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-white flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Section 1: Pending Approvals */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-widest text-brand-gold font-bold">
+                  Pending Applications ({pendingCrew.length})
+                </span>
+                {pendingCrew.length > 0 && (
+                  <span className="text-[10px] text-brand-red bg-brand-red/15 px-2 py-0.5 rounded-full font-bold">
+                    Action Required
+                  </span>
+                )}
+              </div>
+
+              {pendingCrew.length === 0 ? (
+                <div className="p-4 rounded-2xl bg-black/30 border border-white/5 text-center text-xs text-brand-muted font-light">
+                  No pending applications. All crew members are up to date!
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {pendingCrew.map((crew) => (
+                    <div
+                      key={crew.id}
+                      className="p-4 rounded-2xl bg-black/40 border border-brand-gold/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-serif text-base text-white font-medium">{crew.name}</h4>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
+                            {crew.role}
+                          </span>
+                        </div>
+                        <p className="text-xs text-brand-muted font-light mt-1 flex flex-wrap items-center gap-2">
+                          <span>📧 {crew.email}</span>
+                          <span>•</span>
+                          <span>📞 {crew.phone}</span>
+                          <span>•</span>
+                          <span>📍 {crew.city || 'Kumta'}</span>
+                        </p>
+                        {crew.push_token && (
+                          <span className="inline-block mt-1 text-[10px] text-emerald-400 font-semibold">
+                            🔔 Push notifications registered on device
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleApproveCrew(crew.id)}
+                          disabled={isLoading}
+                          className="rounded-full px-4 py-2 bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider hover:bg-emerald-600 transition-all cursor-pointer shadow-md shadow-emerald-500/20"
+                        >
+                          Approve ✓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectCrew(crew.id)}
+                          disabled={isLoading}
+                          className="rounded-full px-3 py-2 bg-white/5 hover:bg-brand-red text-white text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Reject ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Section 2: Approved Crew Roster */}
+            <div className="space-y-3 pt-3 border-t border-white/10">
+              <span className="text-[11px] uppercase tracking-widest text-brand-muted font-bold block">
+                Active Studio Crew ({approvedCrew.length})
+              </span>
+
+              <div className="divide-y divide-white/5 bg-black/25 rounded-2xl border border-white/5 p-2">
+                {approvedCrew.map((crew) => (
+                  <div
+                    key={crew.id}
+                    className="p-3 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-medium text-white flex items-center gap-2">
+                        <span>{crew.name}</span>
+                        <span className="text-[10px] text-brand-gold bg-brand-gold/10 px-2 py-0.5 rounded-full">
+                          {crew.role}
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-brand-muted font-light mt-0.5">
+                        {crew.phone} • {crew.city || 'Kumta'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                        <FaCheckCircle size={10} /> In Booking Dropdown
+                      </span>
+                      {crew.phone && (
+                        <a
+                          href={`https://wa.me/${crew.phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-7 h-7 rounded-full bg-[#25D366] text-white flex items-center justify-center text-xs"
+                          title="Message on WhatsApp"
+                        >
+                          <FaWhatsapp size={12} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsCrewModalOpen(false)}
+                className="rounded-full px-6 py-2.5 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

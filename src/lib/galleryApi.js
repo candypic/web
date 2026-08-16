@@ -430,3 +430,79 @@ export function formatLightroomList(filenames = []) {
     .filter(Boolean)
     .join(', ');
 }
+
+// =========================================================================
+// 8. Crew Profiles & Approval System
+// =========================================================================
+
+export async function listCrewMembers(status = 'approved') {
+  let query = supabase.from('crew_profiles').select('*').order('name', { ascending: true });
+  if (status !== 'all') {
+    query = query.eq('status', status);
+  }
+  const { data, error } = await query;
+  if (error) {
+    console.warn('listCrewMembers fallback:', error.message);
+    return [
+      { id: '1', name: 'Chandan Naik', role: 'Studio Lead', phone: '+91 9743174487', status: 'approved' },
+      { id: '2', name: 'Vikram Naik', role: 'Candid & Drone', phone: '+91 98866 02703', status: 'approved' },
+      { id: '3', name: 'Rahul Naik', role: 'Cinematographer', phone: '+91 98451 23456', status: 'approved' },
+    ];
+  }
+  return data ?? [];
+}
+
+export async function registerCrewMember(profile) {
+  const { data, error } = await supabase.from('crew_profiles').insert([
+    {
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      role: profile.role || 'Candid Photographer',
+      city: profile.city || 'Kumta',
+      push_token: profile.pushToken || null,
+      status: 'pending',
+    },
+  ]).select().single();
+
+  if (error) throw error;
+
+  // Auto-alert Chandan (Super Admin) in admin notifications
+  try {
+    await createAdminNotification({
+      title: '👥 New Crew Registration',
+      message: `${profile.name} (${profile.role}) from ${profile.city} requested to join the team. Awaiting approval.`,
+      type: 'general',
+      link: '/admin/calendar',
+      metadata: { email: profile.email, phone: profile.phone },
+    });
+  } catch (e) {}
+
+  return data;
+}
+
+export async function approveCrewMember(id, approver = 'chandan@candypic.com') {
+  const { data, error } = await supabase
+    .from('crew_profiles')
+    .update({
+      status: 'approved',
+      approved_by: approver,
+      approved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function rejectCrewMember(id) {
+  const { error } = await supabase
+    .from('crew_profiles')
+    .update({ status: 'rejected' })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
