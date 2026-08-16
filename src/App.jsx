@@ -127,7 +127,11 @@ function RealtimePushManager() {
           return;
         }
 
-        // If it's a shoot assignment, check target metadata
+        // If it's targeted at a specific crew member (shoot assignment,
+        // profile approval), only that device should be alerted — even if
+        // this happens to be the admin's own device, e.g. right after they
+        // performed the approval/assignment themselves. Being super admin
+        // only bypasses the *untargeted* check above.
         if (n.metadata?.assigned_to) {
           const target = n.metadata.assigned_to.toLowerCase().trim();
           const targetEmail = (n.metadata.email || '').toLowerCase().trim();
@@ -135,7 +139,7 @@ function RealtimePushManager() {
             (currentName && (target.includes(currentName) || currentName.includes(target))) ||
             (currentEmail && (targetEmail === currentEmail || target.includes(currentEmail) || currentEmail.includes(target)));
 
-          if (!matchesMe && !isSuperAdmin) {
+          if (!matchesMe) {
             return;
           }
         }
