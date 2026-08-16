@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { registerCrewMember } from '../lib/galleryApi';
 import { requestForToken } from '../lib/firebase';
+import { showCrewNotification } from '../lib/notifications';
 
 export default function AdminLogin() {
   const { session, loading: authLoading, signIn } = useAuth();
@@ -112,25 +113,9 @@ export default function AdminLogin() {
 
       // Trigger immediate instant confirmation notification
       try {
-        if ('serviceWorker' in navigator) {
-          const reg = await navigator.serviceWorker.ready;
-          if (reg && reg.showNotification) {
-            reg.showNotification('🎉 Notifications Enabled!', {
-              body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
-              icon: '/logo-nonsquare.png',
-            });
-          } else {
-            new Notification('🎉 Notifications Enabled!', {
-              body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
-              icon: '/logo-nonsquare.png',
-            });
-          }
-        } else {
-          new Notification('🎉 Notifications Enabled!', {
-            body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
-            icon: '/logo-nonsquare.png',
-          });
-        }
+        await showCrewNotification('🎉 Notifications Enabled!', {
+          body: 'Candy Pic shoot assignments and schedule updates will appear on this device.',
+        });
       } catch (notifErr) {
         console.warn('Native notification banner warning:', notifErr);
       }
@@ -174,20 +159,9 @@ export default function AdminLogin() {
 
       // Trigger instant application submission push
       try {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('👥 Application Submitted!', {
-              body: 'Your profile has been sent to Super Admin (chandan@candypic.com) for approval.',
-              icon: '/logo-nonsquare.png',
-            });
-          } else {
-            new Notification('👥 Application Submitted!', {
-              body: 'Your profile has been sent to Super Admin (chandan@candypic.com) for approval.',
-              icon: '/logo-nonsquare.png',
-            });
-          }
-        }
+        await showCrewNotification('👥 Application Submitted!', {
+          body: 'Your profile has been sent to Super Admin (chandan@candypic.com) for approval.',
+        });
       } catch (e) {}
     } catch (err) {
       setError(err?.message || 'Could not submit crew registration. Please check your details.');

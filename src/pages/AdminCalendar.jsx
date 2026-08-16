@@ -268,15 +268,22 @@ export default function AdminCalendar() {
       for (const memberName of allSelectedCrew) {
         const assignedMember = crewMembers.find((c) => c.name === memberName);
         const crewPhone = assignedMember?.phone || '';
+        // Deep link straight into this crew member's own calendar — tapping the
+        // notification resolves + persists their identity on this device (no
+        // separate login step) instead of dropping them on the admin login page.
+        const crewDeepLink = `/crew/calendar${
+          assignedMember?.email ? `?email=${encodeURIComponent(assignedMember.email)}` : ''
+        }`;
 
         try {
           await createAdminNotification({
             title: `📅 Shoot Assigned: ${memberName}`,
             message: `${memberName} assigned to ${formData.clientName} (${formData.eventType}) on ${formattedStartDate}.`,
             type: 'booking',
-            link: '/admin/calendar',
+            link: crewDeepLink,
             metadata: {
               assigned_to: memberName,
+              email: assignedMember?.email || '',
               phone: crewPhone,
               date: formattedStartDate,
               client: formData.clientName,
@@ -296,9 +303,11 @@ export default function AdminCalendar() {
               title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
               body: `Hi ${memberName}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
               assignedTeam: memberName,
+              email: assignedMember?.email || '',
               date: formattedStartDate,
               client: formData.clientName,
               venue: formData.venueLocation,
+              url: crewDeepLink,
             },
           };
 
@@ -317,7 +326,7 @@ export default function AdminCalendar() {
             tokens: [assignedMember?.push_token],
             title: sendPayload.payload.title,
             message: sendPayload.payload.body,
-            link: '/crew/calendar',
+            link: crewDeepLink,
           });
         } catch (notifErr) {
           console.warn('Crew notification dispatch skipped for:', memberName, notifErr);

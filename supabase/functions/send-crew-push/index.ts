@@ -137,6 +137,9 @@ Deno.serve(async (req) => {
             message: {
               token,
               notification: { title, body },
+              // `data` is what our custom firebase-messaging-sw.js background handler
+              // reads to know which URL to open on notification click.
+              data: { url, click_action: url },
               webpush: {
                 fcm_options: { link: url },
                 notification: { icon: "/logo-nonsquare.png", badge: "/logo-nonsquare.png" },

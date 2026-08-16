@@ -27,6 +27,7 @@ import Preloader from './components/Preloader';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { showCrewNotification } from './lib/notifications';
 
 // Component that listens for targeted notifications for the currently logged-in crew member
 function RealtimePushManager() {
@@ -48,6 +49,12 @@ function RealtimePushManager() {
 
     console.log('[CandyPic Push Listener] Initialized for crew identity:', currentName || '(unnamed)', currentEmail || '(no email)');
 
+    // Every deep link carries the crew member's email so tapping the
+    // notification both opens their calendar AND resolves/persists their
+    // identity on this device — a 1-tap "login" with no separate step.
+    const crewCalendarUrl = (email) =>
+      `/crew/calendar${email ? `?email=${encodeURIComponent(email)}` : ''}`;
+
     const channel = supabase.channel('studio-live-events', {
       config: { broadcast: { self: false } },
     });
@@ -58,6 +65,7 @@ function RealtimePushManager() {
 
         // Targeted Recipient Check:
         const assignedTarget = (payload.assignedTeam || '').toLowerCase().trim();
+        const assignedEmail = (payload.email || '').toLowerCase().trim();
         const assignedList = Array.isArray(payload.assignedCrew)
           ? payload.assignedCrew.map((c) => c.toLowerCase().trim())
           : [assignedTarget];
@@ -65,7 +73,7 @@ function RealtimePushManager() {
         // Is this device's user among the assigned crew?
         const isRecipient =
           (currentName && assignedList.some((name) => name.includes(currentName) || currentName.includes(name))) ||
-          (currentEmail && assignedList.some((name) => name.includes(currentEmail) || currentEmail.includes(name))) ||
+          (currentEmail && (assignedEmail === currentEmail || assignedList.some((name) => name.includes(currentEmail) || currentEmail.includes(name)))) ||
           (!currentEmail && !currentName); // Unregistered PWA fallback
 
         if (!isRecipient) {
@@ -75,30 +83,10 @@ function RealtimePushManager() {
 
         console.log(`[CandyPic Push Listener] 🎯 Notification matches this device (${currentName || currentEmail}). Triggering alert...`);
 
-        if (Notification.permission === 'granted') {
-          try {
-            if ('serviceWorker' in navigator) {
-              const reg = await navigator.serviceWorker.ready;
-              if (reg && reg.showNotification) {
-                await reg.showNotification(payload.title || '📸 Candy Pic Shoot Assignment', {
-                  body: payload.body || 'You have been assigned to an upcoming wedding shoot.',
-                  icon: '/logo-nonsquare.png',
-                  badge: '/logo-nonsquare.png',
-                  data: { url: '/crew/calendar' },
-                  vibrate: [200, 100, 200],
-                });
-                console.log('[CandyPic Push Listener] ✅ ServiceWorker showNotification triggered for assigned crew!');
-                return;
-              }
-            }
-            new Notification(payload.title || '📸 Candy Pic Shoot Assignment', {
-              body: payload.body,
-              icon: '/logo-nonsquare.png',
-            });
-          } catch (e) {
-            console.error('[CandyPic Push Listener] ❌ Notification display error:', e);
-          }
-        }
+        await showCrewNotification(payload.title || '📸 Candy Pic Shoot Assignment', {
+          body: payload.body || 'You have been assigned to an upcoming wedding shoot.',
+          url: payload.url || crewCalendarUrl(payload.email || currentEmail),
+        });
       })
       .on('broadcast', { event: 'profile-approved' }, async ({ payload }) => {
         console.log('[CandyPic Push Listener] 🔔 Profile approved broadcast received:', payload);
@@ -124,30 +112,11 @@ function RealtimePushManager() {
           if (payload.email) localStorage.setItem('candy_crew_email', payload.email);
         } catch (e) {}
 
-        if (Notification.permission === 'granted') {
-          try {
-            if ('serviceWorker' in navigator) {
-              const reg = await navigator.serviceWorker.ready;
-              if (reg && reg.showNotification) {
-                await reg.showNotification(payload.title || '🎉 Profile Approved! Welcome to Crew', {
-                  body: payload.body || 'Chandan approved your crew profile. Tap to open your schedule.',
-                  icon: '/logo-nonsquare.png',
-                  badge: '/logo-nonsquare.png',
-                  data: { url: payload.url || `/crew/calendar?email=${encodeURIComponent(payload.email || '')}` },
-                  vibrate: [300, 100, 300],
-                });
-                console.log('[CandyPic Push Listener] ✅ ServiceWorker showNotification triggered for profile approval!');
-                return;
-              }
-            }
-            new Notification(payload.title || '🎉 Profile Approved!', {
-              body: payload.body,
-              icon: '/logo-nonsquare.png',
-            });
-          } catch (e) {
-            console.error('[CandyPic Push Listener] ❌ Approval notification error:', e);
-          }
-        }
+        await showCrewNotification(payload.title || '🎉 Profile Approved! Welcome to Crew', {
+          body: payload.body || 'Chandan approved your crew profile. Tap to open your schedule.',
+          url: payload.url || crewCalendarUrl(payload.email),
+          vibrate: [300, 100, 300],
+        });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_notifications' }, async (payload) => {
         const n = payload.new;
@@ -161,36 +130,20 @@ function RealtimePushManager() {
         // If it's a shoot assignment, check target metadata
         if (n.metadata?.assigned_to) {
           const target = n.metadata.assigned_to.toLowerCase().trim();
+          const targetEmail = (n.metadata.email || '').toLowerCase().trim();
           const matchesMe =
             (currentName && (target.includes(currentName) || currentName.includes(target))) ||
-            (currentEmail && (target.includes(currentEmail) || currentEmail.includes(target)));
+            (currentEmail && (targetEmail === currentEmail || target.includes(currentEmail) || currentEmail.includes(target)));
 
           if (!matchesMe && !isSuperAdmin) {
             return;
           }
         }
 
-        if (Notification.permission === 'granted') {
-          try {
-            if ('serviceWorker' in navigator) {
-              const reg = await navigator.serviceWorker.ready;
-              if (reg && reg.showNotification) {
-                await reg.showNotification(n.title || '📸 Candy Pic Alert', {
-                  body: n.message || 'New shoot assigned',
-                  icon: '/logo-nonsquare.png',
-                  badge: '/logo-nonsquare.png',
-                  data: { url: n.link || '/crew/calendar' },
-                  vibrate: [200, 100, 200],
-                });
-                return;
-              }
-            }
-            new Notification(n.title || '📸 Candy Pic Alert', {
-              body: n.message,
-              icon: '/logo-nonsquare.png',
-            });
-          } catch (e) {}
-        }
+        await showCrewNotification(n.title || '📸 Candy Pic Alert', {
+          body: n.message || 'New shoot assigned',
+          url: n.link || crewCalendarUrl(n.metadata?.email || currentEmail),
+        });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crew_profiles' }, async (payload) => {
         const newProfile = payload.new;
@@ -217,29 +170,11 @@ function RealtimePushManager() {
             localStorage.setItem('candy_crew_email', newProfile.email);
           } catch (e) {}
 
-          if (Notification.permission === 'granted') {
-            try {
-              if ('serviceWorker' in navigator) {
-                const reg = await navigator.serviceWorker.ready;
-                if (reg && reg.showNotification) {
-                  await reg.showNotification('🎉 Profile Approved! Welcome to Crew', {
-                    body: `Hi ${newProfile.name}! Chandan approved your profile as ${newProfile.role}. Tap to open your schedule.`,
-                    icon: '/logo-nonsquare.png',
-                    badge: '/logo-nonsquare.png',
-                    data: { url: `/crew/calendar?email=${encodeURIComponent(newProfile.email)}` },
-                    vibrate: [300, 100, 300],
-                  });
-                  return;
-                }
-              }
-              new Notification('🎉 Profile Approved!', {
-                body: `Hi ${newProfile.name}! Chandan approved your profile as ${newProfile.role}.`,
-                icon: '/logo-nonsquare.png',
-              });
-            } catch (e) {
-              console.error('[CandyPic Push Listener] Error triggering approval notification:', e);
-            }
-          }
+          await showCrewNotification('🎉 Profile Approved! Welcome to Crew', {
+            body: `Hi ${newProfile.name}! Chandan approved your profile as ${newProfile.role}. Tap to open your schedule.`,
+            url: crewCalendarUrl(newProfile.email),
+            vibrate: [300, 100, 300],
+          });
         }
       })
       .subscribe();
