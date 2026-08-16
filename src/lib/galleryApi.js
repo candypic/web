@@ -506,3 +506,25 @@ export async function rejectCrewMember(id) {
   if (error) throw error;
 }
 
+// =========================================================================
+// 9. FCM Push Dispatch (real lock-screen push, works even if app is closed)
+// =========================================================================
+
+const PLACEHOLDER_PUSH_TOKENS = new Set(['web_push_granted']);
+
+export async function sendCrewPush({ tokens = [], title, message, link }) {
+  const validTokens = (tokens || []).filter((t) => t && !PLACEHOLDER_PUSH_TOKENS.has(t));
+  if (validTokens.length === 0) return;
+
+  try {
+    const headers = await authHeader();
+    await fetch(`${FUNCTIONS_URL}/send-crew-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ tokens: validTokens, title, body: message, url: link }),
+    });
+  } catch (e) {
+    console.warn('FCM push dispatch skipped:', e);
+  }
+}
+

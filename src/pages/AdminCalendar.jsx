@@ -46,6 +46,7 @@ import {
   approveCrewMember,
   rejectCrewMember,
   createAdminNotification,
+  sendCrewPush,
 } from '../lib/galleryApi';
 import { Link } from 'react-router-dom';
 
@@ -310,6 +311,14 @@ export default function AdminCalendar() {
               }
             });
           }
+
+          // Real FCM lock-screen push — reaches the device even if the app is closed
+          await sendCrewPush({
+            tokens: [assignedMember?.push_token],
+            title: sendPayload.payload.title,
+            message: sendPayload.payload.body,
+            link: '/crew/calendar',
+          });
         } catch (notifErr) {
           console.warn('Crew notification dispatch skipped for:', memberName, notifErr);
         }

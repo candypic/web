@@ -132,11 +132,11 @@ export default function CrewCalendar() {
       // Match crew member name or email
       return (
         assignedLower.includes(normalizedName) ||
-        (crewProfile?.email && assignedLower.includes(crewProfile.email.toLowerCase())) ||
+        (activeProfile?.email && assignedLower.includes(activeProfile.email.toLowerCase())) ||
         assignedLower.includes(userEmail)
       );
     });
-  }, [bookings, crewName, crewProfile, session]);
+  }, [bookings, crewName, activeProfile, session]);
 
   // Calendar Math
   const monthStart = startOfMonth(currentDate);

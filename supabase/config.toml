@@ -388,6 +388,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/r2-sign/index.ts"
 
+[functions.send-crew-push]
+enabled = true
+# verify_jwt is false so the CORS preflight is not rejected; the function
+# verifies the Supabase JWT manually before doing any work.
+verify_jwt = false
+entrypoint = "./functions/send-crew-push/index.ts"
+
 [functions.telegram-bot]
 enabled = true
 verify_jwt = true

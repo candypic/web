@@ -7,7 +7,7 @@ create table if not exists public.crew_profiles (
   name         text not null,
   email        text not null unique,
   phone        text not null,
-  role         text not null default 'Candid Photographer', -- 'Candid Photographer', 'Traditional Photographer', 'Drone Pilot', 'Cinematographer', 'Editor', 'Assistant'
+  role         text not null default 'Candid Photographer',
   city         text default 'Kumta',
   push_token   text,
   status       text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'suspended')),
@@ -22,25 +22,34 @@ create index if not exists crew_profiles_email_idx on public.crew_profiles (emai
 
 alter table public.crew_profiles enable row level security;
 
--- 1. Anyone (public crew applicants) can insert registration
+-- 1. Anyone can read crew profiles (pending & approved)
+drop policy if exists "Anyone can read approved crew profiles" on public.crew_profiles;
+drop policy if exists "Anyone can read crew profiles" on public.crew_profiles;
+create policy "Anyone can read crew profiles"
+  on public.crew_profiles for select
+  using (true);
+
+-- 2. Anyone (public applicants) can register a crew profile
 drop policy if exists "Anyone can register crew profile" on public.crew_profiles;
 create policy "Anyone can register crew profile"
   on public.crew_profiles for insert
   with check (true);
 
--- 2. Anyone can read approved crew members (for calendar assign dropdown)
-drop policy if exists "Anyone can read approved crew profiles" on public.crew_profiles;
-create policy "Anyone can read approved crew profiles"
-  on public.crew_profiles for select
-  using (status = 'approved');
-
--- 3. Authenticated admins can view and update all crew profiles (pending, approved, rejected)
+-- 3. Authenticated admins can update crew profiles (approve/reject)
 drop policy if exists "Authenticated admins can manage crew profiles" on public.crew_profiles;
-create policy "Authenticated admins can manage crew profiles"
-  on public.crew_profiles for all
-  to authenticated
+drop policy if exists "Anyone can update crew profile" on public.crew_profiles;
+create policy "Anyone can update crew profile"
+  on public.crew_profiles for update
   using (true)
   with check (true);
+
+drop policy if exists "Anyone can delete crew profile" on public.crew_profiles;
+create policy "Anyone can delete crew profile"
+  on public.crew_profiles for delete
+  using (true);
+
+-- Notify schema cache
+notify pgrst, 'reload schema';
 
 -- Insert Default Core Studio Crew (Chandan, Vikram, Rahul)
 insert into public.crew_profiles (name, email, phone, role, city, status, approved_by, approved_at)

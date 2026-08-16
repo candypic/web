@@ -23,6 +23,7 @@ import {
   approveCrewMember,
   rejectCrewMember,
   createAdminNotification,
+  sendCrewPush,
 } from '../../lib/galleryApi';
 
 export default function AdminCrew() {
@@ -110,6 +111,14 @@ export default function AdminCrew() {
               }
             });
           }
+
+          // Real FCM lock-screen push — reaches the device even if the app is closed
+          await sendCrewPush({
+            tokens: [targetMember.push_token],
+            title: '🎉 Profile Approved! Welcome to Crew',
+            message: `Hi ${targetMember.name}! Chandan approved your profile as ${targetMember.role}. Tap to open your schedule.`,
+            link: approvalPayload.payload.url,
+          });
         } catch (pushErr) {
           console.warn('Approval push dispatch skipped:', pushErr);
         }
