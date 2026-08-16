@@ -35,6 +35,9 @@ import {
   formatLightroomList,
   downloadImage,
 } from '../../lib/galleryApi';
+import { runWithConcurrency } from '../../utils/concurrency';
+
+const UPLOAD_CONCURRENCY = 4;
 
 const CATEGORIES = [
   'Ceremony',
@@ -206,9 +209,9 @@ export default function AdminEvents() {
 
       setUploads((prev) => [...batch, ...prev]);
 
-      for (let i = 0; i < files.length; i += 1) {
-        const file = files[i];
-        const item = batch[i];
+      const pairs = files.map((file, i) => ({ file, item: batch[i] }));
+
+      await runWithConcurrency(pairs, UPLOAD_CONCURRENCY, async ({ file, item }) => {
         try {
           const inserted = await uploadEventPhoto(file, selectedEvent.id, {
             category: uploadCategory,
@@ -228,7 +231,7 @@ export default function AdminEvents() {
             )
           );
         }
-      }
+      });
 
       setTimeout(() => {
         setUploads((prev) => prev.filter((u) => u.status === 'error'));

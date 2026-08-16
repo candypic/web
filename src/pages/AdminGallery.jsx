@@ -13,8 +13,10 @@ import {
 } from 'react-icons/fa';
 import AdminLayout from '../components/admin/AdminLayout';
 import { uploadImage, listAllImages, setPublished, deleteImage } from '../lib/galleryApi';
+import { runWithConcurrency } from '../utils/concurrency';
 
 const CATEGORIES = ['General', 'Wedding', 'Pre-Wedding', 'Engagement', 'Haldi', 'Event'];
+const UPLOAD_CONCURRENCY = 4;
 
 function formatBytes(bytes) {
   if (!bytes && bytes !== 0) return '';
@@ -69,9 +71,9 @@ export default function AdminGallery() {
       setUploads((prev) => [...batch, ...prev]);
 
       let anySucceeded = false;
-      for (let i = 0; i < files.length; i += 1) {
-        const file = files[i];
-        const item = batch[i];
+      const pairs = files.map((file, i) => ({ file, item: batch[i] }));
+
+      await runWithConcurrency(pairs, UPLOAD_CONCURRENCY, async ({ file, item }) => {
         try {
           await uploadImage(file, {
             category,
@@ -93,7 +95,7 @@ export default function AdminGallery() {
             )
           );
         }
-      }
+      });
 
       if (anySucceeded) await refresh();
 
