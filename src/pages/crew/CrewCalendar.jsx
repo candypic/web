@@ -123,17 +123,22 @@ export default function CrewCalendar() {
 
   // Filter ONLY shoots assigned to this crew member
   const myAssignedBookings = useMemo(() => {
-    const normalizedName = crewName.toLowerCase().trim();
+    // crewName falls back to the generic 'Team Teammate' placeholder while
+    // identity is still resolving — never treat that as a real match.
+    const normalizedName = activeProfile?.name ? crewName.toLowerCase().trim() : '';
     const userEmail = (session?.user?.email || '').toLowerCase().trim();
+    const profileEmail = (activeProfile?.email || '').toLowerCase().trim();
 
     return bookings.filter((b) => {
       if (!b.assigned_to) return false;
       const assignedLower = b.assigned_to.toLowerCase();
-      // Match crew member name or email
+      // Match crew member name or email — guard every branch against an
+      // empty string, since "anything".includes('') is always true in JS
+      // and would otherwise match every assigned booking, not just yours.
       return (
-        assignedLower.includes(normalizedName) ||
-        (activeProfile?.email && assignedLower.includes(activeProfile.email.toLowerCase())) ||
-        assignedLower.includes(userEmail)
+        (Boolean(normalizedName) && assignedLower.includes(normalizedName)) ||
+        (Boolean(profileEmail) && assignedLower.includes(profileEmail)) ||
+        (Boolean(userEmail) && assignedLower.includes(userEmail))
       );
     });
   }, [bookings, crewName, activeProfile, session]);
