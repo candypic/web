@@ -26,7 +26,7 @@ import CrewCalendar from './pages/crew/CrewCalendar';
 import Preloader from './components/Preloader';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Component that listens for targeted notifications for the currently logged-in crew member
 function RealtimePushManager() {
