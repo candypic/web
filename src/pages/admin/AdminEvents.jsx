@@ -41,6 +41,7 @@ import {
   downloadImage,
 } from '../../lib/galleryApi';
 import { runWithConcurrency } from '../../utils/concurrency';
+import { withTimeout } from '../../utils/withTimeout';
 
 const UPLOAD_CONCURRENCY = 4;
 
@@ -64,6 +65,7 @@ export default function AdminEvents() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Search & Filter for Master Grid
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,7 +108,8 @@ export default function AdminEvents() {
   const loadEvents = useCallback(async (autoSelectId) => {
     try {
       setLoading(true);
-      const data = await listClientEvents();
+      setLoadError('');
+      const data = await withTimeout(listClientEvents(), 15000, 'Loading vaults timed out — check your connection and retry.');
       setEvents(data || []);
 
       const targetId = autoSelectId || selectedEventIdParam;
@@ -123,6 +126,7 @@ export default function AdminEvents() {
       }
     } catch (err) {
       console.error('Error loading events:', err);
+      setLoadError(err?.message || 'Could not load vaults.');
     } finally {
       setLoading(false);
     }
@@ -477,6 +481,19 @@ export default function AdminEvents() {
             <div className="text-center py-16 bg-white/[0.02] border border-white/10 rounded-3xl">
               <div className="h-8 w-8 rounded-full border-2 border-brand-gold/30 border-t-brand-gold animate-spin mx-auto mb-3" />
               <p className="text-xs text-brand-muted">Loading client memory vaults...</p>
+            </div>
+          ) : loadError ? (
+            <div className="text-center py-16 bg-white/[0.02] border border-dashed border-brand-red/30 rounded-3xl p-8">
+              <FaFolderOpen className="text-4xl text-brand-red/50 mx-auto mb-3" />
+              <h3 className="font-serif text-lg text-white mb-1">Couldn't Load Vaults</h3>
+              <p className="text-xs text-brand-muted font-light mb-4">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => loadEvents()}
+                className="rounded-full px-6 py-2.5 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                Retry
+              </button>
             </div>
           ) : filteredEvents.length === 0 ? (
             <div className="text-center py-16 bg-white/[0.02] border border-dashed border-white/15 rounded-3xl p-8">
