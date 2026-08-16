@@ -100,6 +100,55 @@ function RealtimePushManager() {
           }
         }
       })
+      .on('broadcast', { event: 'profile-approved' }, async ({ payload }) => {
+        console.log('[CandyPic Push Listener] 🔔 Profile approved broadcast received:', payload);
+
+        const targetName = (payload.assignedTeam || '').toLowerCase().trim();
+        const targetEmail = (payload.email || '').toLowerCase().trim();
+
+        const matchesMe =
+          (currentName && (targetName.includes(currentName) || currentName.includes(targetName))) ||
+          (currentEmail && (targetEmail.includes(currentEmail) || currentEmail.includes(targetEmail))) ||
+          (!currentEmail && !currentName);
+
+        if (!matchesMe) {
+          console.log(`[CandyPic Push Listener] ⏭️ Approval notification is for ${targetName}. Skipping on this device.`);
+          return;
+        }
+
+        console.log(`[CandyPic Push Listener] 🎯 Profile approved for this device!`);
+
+        // Save approved credentials locally
+        try {
+          if (payload.assignedTeam) localStorage.setItem('candy_crew_name', payload.assignedTeam);
+          if (payload.email) localStorage.setItem('candy_crew_email', payload.email);
+        } catch (e) {}
+
+        if (Notification.permission === 'granted') {
+          try {
+            if ('serviceWorker' in navigator) {
+              const reg = await navigator.serviceWorker.ready;
+              if (reg && reg.showNotification) {
+                await reg.showNotification(payload.title || '🎉 Profile Approved! Welcome to Crew', {
+                  body: payload.body || 'Chandan approved your crew profile. Tap to open your schedule.',
+                  icon: '/logo-nonsquare.png',
+                  badge: '/logo-nonsquare.png',
+                  data: { url: payload.url || `/crew/calendar?email=${encodeURIComponent(payload.email || '')}` },
+                  vibrate: [300, 100, 300],
+                });
+                console.log('[CandyPic Push Listener] ✅ ServiceWorker showNotification triggered for profile approval!');
+                return;
+              }
+            }
+            new Notification(payload.title || '🎉 Profile Approved!', {
+              body: payload.body,
+              icon: '/logo-nonsquare.png',
+            });
+          } catch (e) {
+            console.error('[CandyPic Push Listener] ❌ Approval notification error:', e);
+          }
+        }
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_notifications' }, async (payload) => {
         const n = payload.new;
         if (!n) return;

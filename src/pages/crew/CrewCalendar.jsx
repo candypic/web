@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import {
   format,
@@ -31,14 +32,61 @@ import { useAuth } from '../../context/AuthContext';
 import logo from '/logo-nonsquare.png';
 
 export default function CrewCalendar() {
-  const { session, crewProfile, user, signOut } = useAuth();
+  const { session, crewProfile: authCrewProfile, user, signOut } = useAuth();
+  const [searchParams] = useSearchParams();
+  const [localProfile, setLocalProfile] = useState(null);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
 
-  const crewName = crewProfile?.name || user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'Team Teammate';
-  const crewRole = crewProfile?.role || 'Photographer / Cinematographer';
+  // 1. Resolve Crew Member Profile (from AuthContext, URL query param, or localStorage)
+  useEffect(() => {
+    const resolveCrewIdentity = async () => {
+      if (authCrewProfile) {
+        setLocalProfile(authCrewProfile);
+        try {
+          localStorage.setItem('candy_crew_name', authCrewProfile.name);
+          localStorage.setItem('candy_crew_email', authCrewProfile.email);
+        } catch (e) {}
+        return;
+      }
+
+      let email = searchParams.get('email');
+      if (!email) {
+        try {
+          email = localStorage.getItem('candy_crew_email');
+        } catch (e) {}
+      }
+
+      if (email) {
+        try {
+          const { data } = await supabase
+            .from('crew_profiles')
+            .select('*')
+            .eq('email', email.toLowerCase().trim())
+            .maybeSingle();
+
+          if (data) {
+            setLocalProfile(data);
+            try {
+              localStorage.setItem('candy_crew_name', data.name);
+              localStorage.setItem('candy_crew_email', data.email);
+            } catch (e) {}
+          }
+        } catch (err) {
+          console.warn('Error resolving crew profile from email:', err);
+        }
+      }
+    };
+
+    resolveCrewIdentity();
+  }, [authCrewProfile, searchParams]);
+
+  const activeProfile = localProfile || authCrewProfile;
+  const crewName = activeProfile?.name || user?.user_metadata?.name || 'Team Teammate';
+  const crewRole = activeProfile?.role || 'Photographer / Cinematographer';
 
   // Load all confirmed bookings
   const fetchBookings = async () => {

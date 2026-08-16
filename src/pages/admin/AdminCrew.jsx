@@ -70,7 +70,42 @@ export default function AdminCrew() {
   const handleApprove = async (id) => {
     try {
       setActionLoading(true);
+      const targetMember = crew.find((c) => c.id === id);
       await approveCrewMember(id);
+
+      // Dispatch targeted push notification to the approved applicant
+      if (targetMember) {
+        try {
+          const broadcastChannel = supabase.channel('studio-live-events', {
+            config: { broadcast: { self: false } },
+          });
+
+          const approvalPayload = {
+            type: 'broadcast',
+            event: 'profile-approved',
+            payload: {
+              title: '🎉 Profile Approved! Welcome to Crew',
+              body: `Hi ${targetMember.name}! Chandan approved your profile as ${targetMember.role}. Tap to open your schedule.`,
+              assignedTeam: targetMember.name,
+              email: targetMember.email,
+              url: `/crew/calendar?email=${encodeURIComponent(targetMember.email)}`,
+            },
+          };
+
+          if (broadcastChannel.state === 'joined') {
+            await broadcastChannel.send(approvalPayload);
+          } else {
+            broadcastChannel.subscribe(async (status) => {
+              if (status === 'SUBSCRIBED') {
+                await broadcastChannel.send(approvalPayload);
+              }
+            });
+          }
+        } catch (pushErr) {
+          console.warn('Approval push dispatch skipped:', pushErr);
+        }
+      }
+
       await fetchCrew();
     } catch (err) {
       alert(`Error approving crew member: ${err.message}`);
