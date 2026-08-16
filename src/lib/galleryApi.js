@@ -455,15 +455,15 @@ export async function listCrewMembers(status = 'approved') {
 export async function registerCrewMember(profile) {
   const { data, error } = await supabase.from('crew_profiles').insert([
     {
-      name: profile.name,
-      email: profile.email,
-      phone: profile.phone,
+      name: profile.name.trim(),
+      email: profile.email.trim().toLowerCase(),
+      phone: profile.phone.trim(),
       role: profile.role || 'Candid Photographer',
-      city: profile.city || 'Kumta',
+      city: profile.city?.trim() || 'Kumta',
       push_token: profile.pushToken || null,
       status: 'pending',
     },
-  ]).select().single();
+  ]);
 
   if (error) throw error;
 
@@ -471,14 +471,14 @@ export async function registerCrewMember(profile) {
   try {
     await createAdminNotification({
       title: '👥 New Crew Registration',
-      message: `${profile.name} (${profile.role}) from ${profile.city} requested to join the team. Awaiting approval.`,
+      message: `${profile.name} (${profile.role}) from ${profile.city || 'Kumta'} requested to join the team. Awaiting approval.`,
       type: 'general',
-      link: '/admin/calendar',
+      link: '/admin/crew',
       metadata: { email: profile.email, phone: profile.phone },
     });
   } catch (e) {}
 
-  return data;
+  return { success: true };
 }
 
 export async function approveCrewMember(id, approver = 'chandan@candypic.com') {

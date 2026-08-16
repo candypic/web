@@ -17,6 +17,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminGallery from './pages/AdminGallery';
 import AdminCalendar from './pages/AdminCalendar';
+import AdminCrew from './pages/admin/AdminCrew';
 import AdminNotifications from './pages/admin/AdminNotifications';
 
 // Shell & Context
@@ -94,6 +95,14 @@ function App() {
                 <Route
                   path="/calendar"
                   element={<Navigate to="/admin/calendar" replace />}
+                />
+                <Route
+                  path="/admin/crew"
+                  element={
+                    <ProtectedRoute>
+                      <AdminCrew />
+                    </ProtectedRoute>
+                  }
                 />
                 <Route
                   path="/admin/notifications"

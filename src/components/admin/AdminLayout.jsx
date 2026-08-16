@@ -12,10 +12,11 @@ import {
   FaBars,
   FaTimes,
   FaPlus,
+  FaUsers,
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
-import { listAdminNotifications } from '../../lib/galleryApi';
+import { listAdminNotifications, listCrewMembers } from '../../lib/galleryApi';
 import logo from '/logo-nonsquare.png';
 
 const NAV_ITEMS = [
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { path: '/admin/events', label: 'Client Vaults & Proofs', icon: FaFolderOpen },
   { path: '/admin/gallery', label: 'Showcase Gallery', icon: FaImages },
   { path: '/admin/calendar', label: 'Calendar & Leads', icon: FaCalendarAlt },
+  { path: '/admin/crew', label: 'Crew & Approvals', icon: FaUsers },
   { path: '/admin/notifications', label: 'Alerts', icon: FaBell },
 ];
 
@@ -32,26 +34,36 @@ export default function AdminLayout({ children, title, subtitle, actions }) {
   const navigate = useNavigate();
 
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingCrewCount, setPendingCrewCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Fetch unread notifications & subscribe to realtime changes
+  // Fetch unread notifications & pending crew
   useEffect(() => {
-    const fetchUnread = async () => {
+    const fetchCounters = async () => {
       try {
-        const notifs = await listAdminNotifications(50);
+        const [notifs, crew] = await Promise.all([
+          listAdminNotifications(50).catch(() => []),
+          listCrewMembers('all').catch(() => []),
+        ]);
         const unread = notifs.filter((n) => !n.is_read).length;
         setUnreadCount(unread);
+
+        const pending = crew.filter((c) => c.status === 'pending').length;
+        setPendingCrewCount(pending);
       } catch (err) {
-        console.error('Error loading notifications:', err);
+        console.error('Error loading counters:', err);
       }
     };
 
-    fetchUnread();
+    fetchCounters();
 
     const channel = supabase
-      .channel('admin-notifs-realtime')
+      .channel('admin-layout-counters')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_notifications' }, () => {
-        fetchUnread();
+        fetchCounters();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crew_profiles' }, () => {
+        fetchCounters();
       })
       .subscribe();
 
@@ -116,6 +128,12 @@ export default function AdminLayout({ children, title, subtitle, actions }) {
                   {item.path === '/admin/notifications' && unreadCount > 0 && (
                     <span className="w-5 h-5 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
                       {unreadCount}
+                    </span>
+                  )}
+
+                  {item.path === '/admin/crew' && pendingCrewCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-brand-red text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                      {pendingCrewCount}
                     </span>
                   )}
                 </Link>
