@@ -285,7 +285,7 @@ export default function AdminCalendar() {
 
           // Realtime Push Broadcast across all PWA devices & crew phones
           const broadcastChannel = supabase.channel('studio-live-events', {
-            config: { broadcast: { self: true } },
+            config: { broadcast: { self: false } },
           });
 
           const sendPayload = {
