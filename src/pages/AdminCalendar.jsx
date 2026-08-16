@@ -255,6 +255,22 @@ export default function AdminCalendar() {
             venue: formData.venueLocation,
           },
         });
+
+        // Realtime Push Broadcast across all PWA devices & crew phones
+        const broadcastChannel = supabase.channel('studio-live-events');
+        await broadcastChannel.subscribe();
+        await broadcastChannel.send({
+          type: 'broadcast',
+          event: 'shoot-assigned',
+          payload: {
+            title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
+            body: `Hi ${formData.assignedTeam}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
+            assignedTeam: formData.assignedTeam,
+            date: formattedStartDate,
+            client: formData.clientName,
+            venue: formData.venueLocation,
+          },
+        });
       } catch (notifErr) {
         console.warn('Crew notification dispatch skipped:', notifErr);
       }

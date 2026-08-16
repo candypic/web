@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { supabase } from './lib/supabaseClient';
 
 // Public Pages
 import Home from './pages/Home';
@@ -28,6 +29,44 @@ import { AuthProvider } from './context/AuthContext';
 
 function App() {
   const [loading, setLoading] = useState(true);
+
+  // Global Realtime Push Listener for Android/iOS PWA devices
+  useEffect(() => {
+    if (!('Notification' in window)) return;
+
+    const channel = supabase
+      .channel('studio-live-events')
+      .on('broadcast', { event: 'shoot-assigned' }, async ({ payload }) => {
+        if (Notification.permission === 'granted') {
+          try {
+            if ('serviceWorker' in navigator) {
+              const reg = await navigator.serviceWorker.ready;
+              if (reg && reg.showNotification) {
+                reg.showNotification(payload.title || '📸 Candy Pic Shoot Assignment', {
+                  body: payload.body || 'You have been assigned to an upcoming wedding shoot.',
+                  icon: '/logo-nonsquare.png',
+                  badge: '/logo-nonsquare.png',
+                  data: { url: '/admin/calendar' },
+                  vibrate: [200, 100, 200],
+                });
+                return;
+              }
+            }
+            new Notification(payload.title || '📸 Candy Pic Shoot Assignment', {
+              body: payload.body,
+              icon: '/logo-nonsquare.png',
+            });
+          } catch (e) {
+            console.warn('Realtime push display error:', e);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <>
