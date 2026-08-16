@@ -65,12 +65,22 @@ export default function AdminLogin() {
 
     setSubmitting(true);
     try {
-      const { error: signInError } = await signIn(email.trim(), password);
+      const trimmedEmail = email.trim().toLowerCase();
+      const { error: signInError } = await signIn(trimmedEmail, password);
       if (signInError) {
         setError(signInError.message || 'Unable to sign in. Please check your details.');
         return;
       }
-      navigate('/admin/dashboard');
+
+      if (
+        trimmedEmail === 'chandan@candypic.com' ||
+        trimmedEmail === 'admin@candypic.in' ||
+        trimmedEmail === 'prajnaprabhu9@gmail.com'
+      ) {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/crew/calendar');
+      }
     } catch (err) {
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {

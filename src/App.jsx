@@ -20,6 +20,7 @@ import AdminGallery from './pages/AdminGallery';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminCrew from './pages/admin/AdminCrew';
 import AdminNotifications from './pages/admin/AdminNotifications';
+import CrewCalendar from './pages/crew/CrewCalendar';
 
 // Shell & Context
 import Preloader from './components/Preloader';
@@ -146,7 +147,7 @@ function App() {
                 <Route
                   path="/admin/dashboard"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireAdmin={true}>
                       <AdminDashboard />
                     </ProtectedRoute>
                   }
@@ -154,7 +155,7 @@ function App() {
                 <Route
                   path="/admin/events"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireAdmin={true}>
                       <AdminEvents />
                     </ProtectedRoute>
                   }
@@ -162,7 +163,7 @@ function App() {
                 <Route
                   path="/admin/gallery"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireAdmin={true}>
                       <AdminGallery />
                     </ProtectedRoute>
                   }
@@ -170,7 +171,7 @@ function App() {
                 <Route
                   path="/admin/calendar"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireAdmin={true}>
                       <AdminCalendar />
                     </ProtectedRoute>
                   }
@@ -182,7 +183,7 @@ function App() {
                 <Route
                   path="/admin/crew"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireAdmin={true}>
                       <AdminCrew />
                     </ProtectedRoute>
                   }
@@ -190,10 +191,24 @@ function App() {
                 <Route
                   path="/admin/notifications"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireAdmin={true}>
                       <AdminNotifications />
                     </ProtectedRoute>
                   }
+                />
+
+                {/* ── Dedicated Crew Member Portal (Assigned Calendar Only) ── */}
+                <Route
+                  path="/crew/calendar"
+                  element={
+                    <ProtectedRoute>
+                      <CrewCalendar />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/crew"
+                  element={<Navigate to="/crew/calendar" replace />}
                 />
 
                 {/* ── Fallback Catch-all ── */}

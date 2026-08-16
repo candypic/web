@@ -78,7 +78,8 @@ export default function AdminCalendar() {
     venueLocation: '',
     budgetTotal: '',
     advancePaid: '',
-    assignedTeam: 'Chandan Naik',
+    assignedCrew: ['Chandan Naik'],
+    customCrew: '',
     specialNotes: '',
     autoBlockCalendar: true,
     autoGenerateVault: true,
@@ -89,25 +90,41 @@ export default function AdminCalendar() {
 
   // --- 1. FETCH DATA ---
   const fetchData = async () => {
-    const [{ data: bookingsData }, eventsData, crewData] = await Promise.all([
-      supabase.from('bookings').select('*').order('booking_date', { ascending: true }),
-      listClientEvents().catch(() => []),
-      listCrewMembers('all').catch(() => []),
-    ]);
+    try {
+      setIsLoading(true);
+      const [bookingsData, vaultsData, crewData] = await Promise.all([
+        supabase
+          .from('bookings')
+          .select('*')
+          .order('booking_date', { ascending: true }),
+        listClientEvents(),
+        listCrewMembers('all').catch(() => []),
+      ]);
 
-    if (bookingsData) setBookings(bookingsData);
-    if (eventsData) setClientEvents(eventsData);
-    if (crewData) setCrewMembers(crewData);
+      if (bookingsData.error) throw bookingsData.error;
+      setBookings(bookingsData.data || []);
+      setClientEvents(vaultsData || []);
+      setCrewMembers(crewData || []);
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchData();
+
     const channel = supabase
-      .channel('admin-calendar-realtime')
+      .channel('admin-calendar-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
         fetchData();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crew_profiles' }, () => {
+        fetchData();
+      })
       .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
@@ -181,7 +198,8 @@ export default function AdminCalendar() {
       venueLocation: '',
       budgetTotal: '',
       advancePaid: '',
-      assignedTeam: 'Chandan Naik',
+      assignedCrew: ['Chandan Naik'],
+      customCrew: '',
       specialNotes: '',
       autoBlockCalendar: true,
       autoGenerateVault: true,
@@ -219,6 +237,13 @@ export default function AdminCalendar() {
 
       const compiledNotes = detailsList.join(' | ');
 
+      // Compile multi-crew selection
+      const allSelectedCrew = [...(formData.assignedCrew || [])];
+      if (formData.customCrew && formData.customCrew.trim()) {
+        allSelectedCrew.push(formData.customCrew.trim());
+      }
+      const compiledCrewString = allSelectedCrew.length > 0 ? allSelectedCrew.join(', ') : 'Chandan Naik';
+
       const payload = {
         client_name: formData.clientName.trim(),
         client_phone: formData.clientPhone.trim(),
@@ -226,7 +251,7 @@ export default function AdminCalendar() {
         booking_end_date: formattedEndDate,
         event_type: formData.eventType || 'Wedding Photography',
         status: 'confirmed',
-        assigned_to: formData.assignedTeam || 'Chandan Naik',
+        assigned_to: compiledCrewString,
         additional_info: compiledNotes,
       };
 
@@ -238,59 +263,56 @@ export default function AdminCalendar() {
         if (error) throw error;
       }
 
-      // 1. Dispatch Assignment Notification for the Crew Member
-      const assignedMember = crewMembers.find((c) => c.name === formData.assignedTeam);
-      const crewPhone = assignedMember?.phone || '';
+      // 1. Dispatch Assignment Notification for each selected crew member
+      for (const memberName of allSelectedCrew) {
+        const assignedMember = crewMembers.find((c) => c.name === memberName);
+        const crewPhone = assignedMember?.phone || '';
 
-      try {
-        await createAdminNotification({
-          title: `📅 Shoot Assigned: ${formData.assignedTeam}`,
-          message: `${formData.assignedTeam} assigned to ${formData.clientName} (${formData.eventType}) on ${formattedStartDate}.`,
-          type: 'booking',
-          link: '/admin/calendar',
-          metadata: {
-            assigned_to: formData.assignedTeam,
-            phone: crewPhone,
-            date: formattedStartDate,
-            client: formData.clientName,
-            venue: formData.venueLocation,
-          },
-        });
-
-        // Realtime Push Broadcast across all PWA devices & crew phones
-        console.log('[CandyPic Push Sender] Dispatching to studio-live-events channel...');
-        const broadcastChannel = supabase.channel('studio-live-events', {
-          config: { broadcast: { self: true } },
-        });
-
-        const sendPayload = {
-          type: 'broadcast',
-          event: 'shoot-assigned',
-          payload: {
-            title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
-            body: `Hi ${formData.assignedTeam}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
-            assignedTeam: formData.assignedTeam,
-            date: formattedStartDate,
-            client: formData.clientName,
-            venue: formData.venueLocation,
-          },
-        };
-
-        // If channel is already joined/subscribed, send immediately
-        if (broadcastChannel.state === 'joined') {
-          const res = await broadcastChannel.send(sendPayload);
-          console.log('[CandyPic Push Sender] Sent immediately on joined channel:', res);
-        } else {
-          broadcastChannel.subscribe(async (status) => {
-            console.log('[CandyPic Push Sender] Channel connection status:', status);
-            if (status === 'SUBSCRIBED') {
-              const res = await broadcastChannel.send(sendPayload);
-              console.log('[CandyPic Push Sender] Broadcast sent response:', res);
-            }
+        try {
+          await createAdminNotification({
+            title: `📅 Shoot Assigned: ${memberName}`,
+            message: `${memberName} assigned to ${formData.clientName} (${formData.eventType}) on ${formattedStartDate}.`,
+            type: 'booking',
+            link: '/admin/calendar',
+            metadata: {
+              assigned_to: memberName,
+              phone: crewPhone,
+              date: formattedStartDate,
+              client: formData.clientName,
+              venue: formData.venueLocation,
+            },
           });
+
+          // Realtime Push Broadcast across all PWA devices & crew phones
+          const broadcastChannel = supabase.channel('studio-live-events', {
+            config: { broadcast: { self: true } },
+          });
+
+          const sendPayload = {
+            type: 'broadcast',
+            event: 'shoot-assigned',
+            payload: {
+              title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
+              body: `Hi ${memberName}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
+              assignedTeam: memberName,
+              date: formattedStartDate,
+              client: formData.clientName,
+              venue: formData.venueLocation,
+            },
+          };
+
+          if (broadcastChannel.state === 'joined') {
+            await broadcastChannel.send(sendPayload);
+          } else {
+            broadcastChannel.subscribe(async (status) => {
+              if (status === 'SUBSCRIBED') {
+                await broadcastChannel.send(sendPayload);
+              }
+            });
+          }
+        } catch (notifErr) {
+          console.warn('Crew notification dispatch skipped for:', memberName, notifErr);
         }
-      } catch (notifErr) {
-        console.warn('Crew notification dispatch skipped:', notifErr);
       }
 
       // Auto-generate Client Memory Vault if toggle is checked
@@ -992,44 +1014,55 @@ export default function AdminCalendar() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
-                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1 font-semibold">
-                      Assign Lead / Team Member
+                    <label className="block text-[10px] uppercase tracking-widest text-brand-muted mb-1.5 font-semibold">
+                      Assign Studio Crew (Select All That Apply)
                     </label>
-                    <select
-                      value={
-                        approvedCrew.some((c) => c.name === formData.assignedTeam)
-                          ? formData.assignedTeam
-                          : 'Custom'
-                      }
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === 'Custom') {
-                          setFormData({ ...formData, assignedTeam: '' });
-                        } else {
-                          setFormData({ ...formData, assignedTeam: val });
-                        }
-                      }}
-                      className="w-full rounded-xl bg-brand-deep border border-white/15 px-3 py-2 text-xs text-white outline-none focus:border-brand-gold [color-scheme:dark]"
-                    >
-                      {approvedCrew.map((crew) => (
-                        <option key={crew.id} value={crew.name}>
-                          {crew.name} ({crew.role})
-                        </option>
-                      ))}
-                      <option value="Custom">+ Custom / Freelance Crew...</option>
-                    </select>
+                    <div className="flex flex-wrap gap-2">
+                      {approvedCrew.map((crew) => {
+                        const isSelected = (formData.assignedCrew || []).includes(crew.name);
+                        return (
+                          <button
+                            key={crew.id}
+                            type="button"
+                            onClick={() => {
+                              const current = formData.assignedCrew || [];
+                              if (isSelected) {
+                                setFormData({
+                                  ...formData,
+                                  assignedCrew: current.filter((n) => n !== crew.name),
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  assignedCrew: [...current, crew.name],
+                                });
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-brand-gold text-brand-dark font-bold border-brand-gold shadow-md shadow-brand-gold/20'
+                                : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10 hover:border-white/25'
+                            }`}
+                          >
+                            <span>{isSelected ? '✓' : '+'}</span>
+                            <span>{crew.name}</span>
+                            <span className={`text-[10px] opacity-80 ${isSelected ? 'text-brand-dark' : 'text-brand-gold'}`}>
+                              ({crew.role})
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                    {(!approvedCrew.some((c) => c.name === formData.assignedTeam) || formData.assignedTeam === '') && (
-                      <input
-                        type="text"
-                        placeholder="Enter Photographer / Crew Name"
-                        value={formData.assignedTeam}
-                        onChange={(e) => setFormData({ ...formData, assignedTeam: e.target.value })}
-                        className="w-full mt-2 rounded-xl bg-black/40 border border-white/15 px-3.5 py-1.5 text-xs text-white outline-none focus:border-brand-gold"
-                      />
-                    )}
+                    <input
+                      type="text"
+                      placeholder="+ Freelance / External Crew Name (optional)"
+                      value={formData.customCrew || ''}
+                      onChange={(e) => setFormData({ ...formData, customCrew: e.target.value })}
+                      className="w-full mt-2 rounded-xl bg-black/40 border border-white/15 px-3.5 py-1.5 text-xs text-white outline-none focus:border-brand-gold"
+                    />
                   </div>
 
                   <div>

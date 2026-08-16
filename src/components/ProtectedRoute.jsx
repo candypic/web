@@ -2,8 +2,8 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function ProtectedRoute({ children }) {
-  const { session, loading } = useAuth();
+export default function ProtectedRoute({ children, requireAdmin = false }) {
+  const { session, isAdmin, isCrew, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -16,6 +16,11 @@ export default function ProtectedRoute({ children }) {
 
   if (!session) {
     return <Navigate to="/admin/login" replace state={{ from: location }} />;
+  }
+
+  // If page requires full admin (vaults, showcase, crew approvals, finance) but user is only crew member
+  if (requireAdmin && !isAdmin) {
+    return <Navigate to="/crew/calendar" replace />;
   }
 
   return children;

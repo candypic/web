@@ -68,12 +68,29 @@ export default function AdminCrew() {
 
   // Approve Handler
   const handleApprove = async (id) => {
-    setActionLoading(true);
     try {
-      await approveCrewMember(id, 'chandan@candypic.com');
+      setActionLoading(true);
+      await approveCrewMember(id);
       await fetchCrew();
     } catch (err) {
-      alert(`Approval error: ${err.message}`);
+      alert(`Error approving crew member: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Update Role Handler (Chandan sets role)
+  const handleUpdateRole = async (id, newRole) => {
+    try {
+      setActionLoading(true);
+      const { error } = await supabase
+        .from('crew_profiles')
+        .update({ role: newRole })
+        .eq('id', id);
+      if (error) throw error;
+      await fetchCrew();
+    } catch (err) {
+      alert(`Failed to update role: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -81,13 +98,13 @@ export default function AdminCrew() {
 
   // Reject Handler
   const handleReject = async (id) => {
-    if (!confirm('Reject this crew applicant?')) return;
-    setActionLoading(true);
+    if (!window.confirm('Are you sure you want to decline this application?')) return;
     try {
+      setActionLoading(true);
       await rejectCrewMember(id);
       await fetchCrew();
     } catch (err) {
-      alert(`Rejection error: ${err.message}`);
+      alert(`Error rejecting application: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -369,11 +386,26 @@ export default function AdminCrew() {
                 className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-serif text-base text-white font-medium">{member.name}</h3>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-brand-gold/15 text-brand-gold border border-brand-gold/30">
-                      {member.role}
-                    </span>
+
+                    {/* Role Selector (Chandan can change role anytime) */}
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleUpdateRole(member.id, e.target.value)}
+                      disabled={actionLoading}
+                      className="rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-brand-gold [color-scheme:dark] cursor-pointer"
+                      title="Click to reassign this crew member's role"
+                    >
+                      <option value="Studio Lead">Studio Lead</option>
+                      <option value="Candid Photographer">Candid Photographer</option>
+                      <option value="Traditional Photographer">Traditional Photographer</option>
+                      <option value="Drone Pilot & Aerial Cinema">Drone Pilot & Aerial Cinema</option>
+                      <option value="Lead Cinematographer">Lead Cinematographer</option>
+                      <option value="Editor / Retoucher">Editor / Retoucher</option>
+                      <option value="Assistant / Lighting">Assistant / Lighting</option>
+                    </select>
+
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-semibold">
                       Active
                     </span>
