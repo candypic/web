@@ -41,23 +41,48 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      if (data.session?.user?.email) {
-        await fetchProfile(data.session.user.email);
-      } else {
-        // Crew members never get a real Supabase Auth session — they're
-        // identified on this device via the email saved to localStorage
-        // at registration/approval. Resolve that so the app knows, on
-        // every launch, whether this device belongs to approved crew.
-        let localEmail = '';
-        try {
-          localEmail = localStorage.getItem('candy_crew_email') || '';
-        } catch (e) {}
-        if (localEmail) await fetchProfile(localEmail);
+    // A stale/corrupted session token in localStorage (e.g. left over from
+    // an earlier login) can make getSession() hang or reject instead of
+    // resolving. Without a catch/fallback here, `loading` would stay true
+    // forever and every gated route (HomeGate, ProtectedRoute) would spin
+    // indefinitely — which is exactly what a stuck normal-profile browser
+    // looks like next to a clean incognito window with no stored token.
+    let settled = false;
+    const finishLoading = () => {
+      if (!settled) {
+        settled = true;
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+    const safetyTimeout = setTimeout(finishLoading, 6000);
+
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        setSession(data.session);
+        if (data.session?.user?.email) {
+          await fetchProfile(data.session.user.email);
+        } else {
+          // Crew members never get a real Supabase Auth session — they're
+          // identified on this device via the email saved to localStorage
+          // at registration/approval. Resolve that so the app knows, on
+          // every launch, whether this device belongs to approved crew.
+          let localEmail = '';
+          try {
+            localEmail = localStorage.getItem('candy_crew_email') || '';
+          } catch (e) {}
+          if (localEmail) await fetchProfile(localEmail);
+        }
+      })
+      .catch((err) => {
+        console.warn('Session resolution failed, clearing to a logged-out state:', err);
+        setSession(null);
+        setCrewProfile(null);
+      })
+      .finally(() => {
+        clearTimeout(safetyTimeout);
+        finishLoading();
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession);
@@ -68,7 +93,10 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const userEmail = session?.user?.email?.toLowerCase().trim() || '';
