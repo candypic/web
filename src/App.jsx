@@ -76,6 +76,33 @@ function App() {
           console.warn('[CandyPic Push Listener] ⚠️ Cannot show notification. Permission is:', hasNotification ? Notification.permission : 'unsupported');
         }
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_notifications' }, async (payload) => {
+        console.log('[CandyPic Push Listener] 🔔 Postgres Notification Insert received:', payload);
+        const n = payload.new;
+        if (n && hasNotification && Notification.permission === 'granted') {
+          try {
+            if ('serviceWorker' in navigator) {
+              const reg = await navigator.serviceWorker.ready;
+              if (reg && reg.showNotification) {
+                await reg.showNotification(n.title || '📸 Candy Pic Alert', {
+                  body: n.message || 'New shoot assigned',
+                  icon: '/logo-nonsquare.png',
+                  badge: '/logo-nonsquare.png',
+                  data: { url: n.link || '/admin/calendar' },
+                  vibrate: [200, 100, 200],
+                });
+                return;
+              }
+            }
+            new Notification(n.title || '📸 Candy Pic Alert', {
+              body: n.message,
+              icon: '/logo-nonsquare.png',
+            });
+          } catch (e) {
+            console.error('[CandyPic Push Listener] Postgres notification display error:', e);
+          }
+        }
+      })
       .subscribe((status) => {
         console.log('[CandyPic Push Listener] Channel studio-live-events subscription status:', status);
       });

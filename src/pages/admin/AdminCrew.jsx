@@ -154,25 +154,34 @@ export default function AdminCrew() {
     const testChannel = supabase.channel('studio-live-events', {
       config: { broadcast: { self: true } },
     });
-    testChannel.subscribe(async (status) => {
-      console.log('[CandyPic Test] Channel status:', status);
-      if (status === 'SUBSCRIBED') {
-        const res = await testChannel.send({
-          type: 'broadcast',
-          event: 'shoot-assigned',
-          payload: {
-            title: '📸 Live Shoot Assignment Alert!',
-            body: 'This is a live test broadcast! Your device is successfully connected to Candy Pic Studio alerts.',
-            assignedTeam: 'You',
-            date: new Date().toISOString().split('T')[0],
-            client: 'Test Couple',
-            venue: 'Gokarna Beach',
-          },
-        });
-        console.log('[CandyPic Test] Broadcast send result:', res);
-        alert('✅ Broadcast dispatched! Check your notification bar / lock-screen.');
-      }
-    });
+
+    const testPayload = {
+      type: 'broadcast',
+      event: 'shoot-assigned',
+      payload: {
+        title: '📸 Live Shoot Assignment Alert!',
+        body: 'This is a live test broadcast! Your device is successfully connected to Candy Pic Studio alerts.',
+        assignedTeam: 'You',
+        date: new Date().toISOString().split('T')[0],
+        client: 'Test Couple',
+        venue: 'Gokarna Beach',
+      },
+    };
+
+    if (testChannel.state === 'joined') {
+      const res = await testChannel.send(testPayload);
+      console.log('[CandyPic Test] Sent immediately on joined channel:', res);
+      alert('✅ Broadcast dispatched! Check your notification bar / lock-screen.');
+    } else {
+      testChannel.subscribe(async (status) => {
+        console.log('[CandyPic Test] Channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          const res = await testChannel.send(testPayload);
+          console.log('[CandyPic Test] Broadcast send result:', res);
+          alert('✅ Broadcast dispatched! Check your notification bar / lock-screen.');
+        }
+      });
+    }
   };
 
   return (

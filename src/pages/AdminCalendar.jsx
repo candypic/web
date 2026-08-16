@@ -258,29 +258,37 @@ export default function AdminCalendar() {
         });
 
         // Realtime Push Broadcast across all PWA devices & crew phones
-        console.log('[CandyPic Push Sender] Connecting to studio-live-events channel...');
+        console.log('[CandyPic Push Sender] Dispatching to studio-live-events channel...');
         const broadcastChannel = supabase.channel('studio-live-events', {
           config: { broadcast: { self: true } },
         });
 
-        broadcastChannel.subscribe(async (status) => {
-          console.log('[CandyPic Push Sender] Channel connection status:', status);
-          if (status === 'SUBSCRIBED') {
-            const sendResult = await broadcastChannel.send({
-              type: 'broadcast',
-              event: 'shoot-assigned',
-              payload: {
-                title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
-                body: `Hi ${formData.assignedTeam}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
-                assignedTeam: formData.assignedTeam,
-                date: formattedStartDate,
-                client: formData.clientName,
-                venue: formData.venueLocation,
-              },
-            });
-            console.log('[CandyPic Push Sender] Broadcast sent response:', sendResult);
-          }
-        });
+        const sendPayload = {
+          type: 'broadcast',
+          event: 'shoot-assigned',
+          payload: {
+            title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
+            body: `Hi ${formData.assignedTeam}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
+            assignedTeam: formData.assignedTeam,
+            date: formattedStartDate,
+            client: formData.clientName,
+            venue: formData.venueLocation,
+          },
+        };
+
+        // If channel is already joined/subscribed, send immediately
+        if (broadcastChannel.state === 'joined') {
+          const res = await broadcastChannel.send(sendPayload);
+          console.log('[CandyPic Push Sender] Sent immediately on joined channel:', res);
+        } else {
+          broadcastChannel.subscribe(async (status) => {
+            console.log('[CandyPic Push Sender] Channel connection status:', status);
+            if (status === 'SUBSCRIBED') {
+              const res = await broadcastChannel.send(sendPayload);
+              console.log('[CandyPic Push Sender] Broadcast sent response:', res);
+            }
+          });
+        }
       } catch (notifErr) {
         console.warn('Crew notification dispatch skipped:', notifErr);
       }
