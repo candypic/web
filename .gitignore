@@ -26,3 +26,6 @@ dist-ssr
 # Firebase Secrets
 service-account.json
 supabase/functions/telegram-bot/service-account.json
+*-firebase-adminsdk-*.json
+candypic-*.json
+

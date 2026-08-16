@@ -19,8 +19,8 @@ export default defineConfig({
         name: 'Candy Pic Admin',
         short_name: 'CandyAdmin',
         description: 'Internal Booking System for Candy Pic',
-        theme_color: '#0f172a', // Matches your Admin Calendar background
-        background_color: '#0f172a',
+        theme_color: '#0b262d', // Matches the brand deep-teal background
+        background_color: '#0b262d',
         display: 'standalone', // CRITICAL: Removes browser address bar
         orientation: 'portrait',
         start_url: '/calendar', // Tries to open directly to calendar

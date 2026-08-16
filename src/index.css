@@ -1,13 +1,125 @@
 @import "tailwindcss";
 
-html, body {
-  width: 100%;
-  overflow-x: hidden;
-  margin: 0;
-  padding: 0;
+/* =========================================================================
+   Candy Pic — Design System (Tailwind v4 @theme)
+   Deep-teal + gold luxury event/wedding identity.
+   NOTE: these tokens were previously used across the app (brand-gold,
+   brand-dark, font-script, animate-fade-in, no-scrollbar...) but never
+   defined, so they silently did nothing. Defining them here brings the
+   whole UI to life.
+   ========================================================================= */
+@theme {
+  /* Brand palette */
+  --color-brand-dark: #0b262d;     /* primary background (deep teal)   */
+  --color-brand-darker: #061a1f;   /* footer / deepest sections        */
+  --color-brand-deep: #0e313a;     /* raised cards / panels            */
+  --color-brand-gold: #d4af37;     /* primary accent (gold)            */
+  --color-brand-gold-soft: #ecc878;/* lighter gold for gradients/text  */
+  --color-brand-red: #c0392b;      /* secondary accent (warm red)      */
+  --color-brand-light: #f5efe2;    /* warm cream surfaces              */
+  --color-brand-text: #f4f4f4;     /* base text                        */
+  --color-brand-muted: #9cb3b8;    /* muted teal-grey secondary text   */
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+  --font-display: "Playfair Display", ui-serif, Georgia, serif;
+  --font-script: "Great Vibes", "Brush Script MT", cursive;
+
+  /* Motion */
+  --animate-fade-in: fade-in 0.8s ease-out both;
+  --animate-fade-up: fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
 }
 
-body {
-  /* Ensure the background is solid deep teal */
-  @apply bg-[#0b262d] text-[#f4f4f4] font-sans; 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  html, body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+  body {
+    background-color: var(--color-brand-dark);
+    color: var(--color-brand-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-brand-gold);
+    color: var(--color-brand-dark);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Subtle film-grain texture for premium dark sections */
+  .bg-grain {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+
+  .text-shadow-soft { text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45); }
+}
+
+/* =========================================================================
+   Mobile / Touch Enhancements
+   ========================================================================= */
+@layer base {
+  /* Safe-area insets for notched iPhones (X, 11, 12, 13, 14, 15 series) */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Smooth momentum scrolling on iOS */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent double-tap zoom on interactive elements */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Ensure images never overflow their containers */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Minimum tap target size for accessibility (44x44px recommended) */
+  button, a {
+    min-height: 44px;
+  }
+
+  /* Fix input zoom on iOS (font-size must be >= 16px to prevent zoom) */
+  input, select, textarea {
+    font-size: 16px;
+  }
 }

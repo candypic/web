@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInte
 import { FaChevronLeft, FaChevronRight, FaWhatsapp, FaCamera, FaBan, FaUser, FaPhone, FaCalendarAlt, FaUserTag, FaTrashAlt, FaCheckCircle, FaInfoCircle, FaBell, FaAddressBook, FaPlus, FaArrowLeft, FaEdit, FaTimes } from 'react-icons/fa';
 import BottomDrawer from '../components/BottomDrawer';
 import { requestForToken } from '../lib/firebase'; // Ensure you created this file in previous steps
+import AdminLayout from '../components/admin/AdminLayout';
 
 const AdminCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -41,8 +42,6 @@ const AdminCalendar = () => {
   }, []);
 
   // --- 2. NOTIFICATION REGISTRATION ---
-  // --- 2. NOTIFICATION REGISTRATION (Updated) ---
-  // --- 2. NOTIFICATION REGISTRATION (Debug Version) ---
   const handleEnableNotifications = async () => {
     const name = prompt("Enter your Name (e.g. Rahul):");
     if (!name) return;
@@ -61,67 +60,52 @@ const AdminCalendar = () => {
             return;
         }
 
-        console.log("Got Token:", token);
-        console.log("Saving to Supabase...");
-
         const { data, error } = await supabase
             .from('team_devices')
             .upsert({ 
                 name: name, 
-                phone: cleanPhone,
-                push_token: token,
-                last_active: new Date()
-            }, { onConflict: 'push_token' })
-            .select();
+                phone: cleanPhone, 
+                fcm_token: token,
+                updated_at: new Date()
+            }, { onConflict: 'fcm_token' });
 
         if (error) {
             console.error("Supabase Error:", error);
-            alert(`Database Error: ${error.message}`);
+            alert(`Supabase Error: ${error.message}`);
         } else {
-            console.log("Success Data:", data);
-            alert(`✅ Success! Device linked to ${cleanPhone}.`);
-        }
-    } catch (err) {
-        console.error("Unexpected Error:", err);
-        alert("An unexpected error occurred. See console.");
-    }
-  };
-
-  // --- CONTACT PICKER ---
-  const handlePickContact = async () => {
-    try {
-        if (!('contacts' in navigator && 'ContactsManager' in window)) {
-            alert("Contact Picker is not supported on this device. Try using Chrome on Android.");
-            return;
-        }
-        
-        const props = ['name', 'tel'];
-        const contacts = await navigator.contacts.select(props, { multiple: true });
-        
-        if (contacts.length > 0) {
-            const newPeople = contacts
-                .map(c => ({
-                    name: c.name ? c.name[0] : '',
-                    phone: c.tel ? c.tel[0] : ''
-                }))
-                .filter(p => p.name && !formData.assignedTo.some(existing => existing.name === p.name));
+            console.log("Supabase Success:", data);
+            alert("✅ Device Registered! Test notification sent.");
             
-            if (newPeople.length > 0) {
-                setFormData(prev => ({
-                    ...prev,
-                    assignedTo: [...prev.assignedTo, ...newPeople]
-                }));
+            // --- TEST TRIGGER ---
+            try {
+                await fetch('https://tikqxpgqgfciuyvaspdi.supabase.co/functions/v1/booking-created', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        record: { 
+                            client_name: "Test User", 
+                            booking_date: new Date().toISOString().split('T')[0],
+                            status: "test" 
+                        } 
+                    })
+                });
+            } catch (triggerErr) {
+                console.error("Trigger failed:", triggerErr);
             }
         }
-    } catch (error) {
-        console.error("Contact pick failed:", error);
+    } catch (err) {
+        console.error("Critical Error:", err);
+        alert(`Error: ${err.message}`);
     }
   };
 
-  const addPerson = (name) => {
-    if (!name) return;
-    if (formData.assignedTo.some(p => p.name === name)) return;
-    setFormData(prev => ({ ...prev, assignedTo: [...prev.assignedTo, { name, phone: '' }] }));
+  const handleAddPerson = () => {
+    if (!tempName.trim()) return;
+    setFormData(prev => ({
+        ...prev,
+        assignedTo: [...prev.assignedTo, { name: tempName.trim(), phone: '' }]
+    }));
+    setTempName('');
   };
 
   const removePerson = (name) => {
@@ -155,7 +139,6 @@ const AdminCalendar = () => {
 
   const handleDateClick = (day) => {
     setSelectedDate(day);
-    // Reset form, default endDate is selected date
     const dateStr = format(day, 'yyyy-MM-dd');
     setFormData({ 
         clientName: '', 
@@ -191,43 +174,45 @@ const AdminCalendar = () => {
     setIsLoading(true);
     try {
         const formattedStartDate = format(selectedDate, 'yyyy-MM-dd');
-        // Logic: If name is empty, it's a BLOCK. If name exists, it's a BOOKING.
         const isBlocking = !formData.clientName.trim(); 
 
         const payload = {
+            client_name: isBlocking ? 'BLOCKED' : formData.clientName,
+            client_phone: formData.clientPhone,
             booking_date: formattedStartDate,
-            status: isBlocking ? 'blocked' : 'confirmed',
-            event_type: isBlocking ? 'Block' : 'Manual Booking',
-            
-            client_name: isBlocking ? 'Date Blocked' : formData.clientName,
-            client_phone: formData.clientPhone || null,
-            assigned_to: formData.assignedTo.length > 0 ? formData.assignedTo.map(p => p.name).join(', ') : null,
-            assigned_phones: formData.assignedTo.map(p => p.phone).filter(Boolean),
-            additional_info: formData.additionalInfo || null,
-            // Only save end date if it's different from start date
-            booking_end_date: formData.endDate !== formattedStartDate ? formData.endDate : null
+            booking_end_date: formData.endDate || formattedStartDate,
+            event_type: isBlocking ? 'Block' : 'Booking',
+            status: isBlocking ? 'confirmed' : (editingId ? undefined : 'confirmed'),
+            assigned_to: formData.assignedTo.map(p => p.name).join(', '),
+            assigned_phones: formData.assignedTo.map(p => p.phone),
+            additional_info: formData.additionalInfo
         };
 
         if (editingId) {
-            const { error } = await supabase.from('bookings').update(payload).eq('id', editingId);
+            const { error } = await supabase
+                .from('bookings')
+                .update(payload)
+                .eq('id', editingId);
             if (error) throw error;
         } else {
-            const { error } = await supabase.from('bookings').insert(payload);
+            const { error } = await supabase
+                .from('bookings')
+                .insert([payload]);
             if (error) throw error;
         }
-        
+
         await fetchBookings();
-        setEditingId(null);
         setIsDrawerOpen(false);
     } catch (error) {
-        alert(`Failed: ${error.message}`);
+        console.error("Save failed:", error);
+        alert(`Failed to save: ${error.message}`);
     } finally {
         setIsLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Permanently delete this entry?")) return;
+    if (!confirm("Are you sure?")) return;
     setIsLoading(true);
     try {
         const { error } = await supabase.from('bookings').delete().eq('id', id);
@@ -257,43 +242,40 @@ const AdminCalendar = () => {
   const eventsOnSelectedDate = selectedDate ? getEventsForDay(selectedDate) : [];
 
   return (
-    <div className="fixed inset-0 h-[100dvh] w-full bg-[#0b262d] text-white flex flex-col overflow-hidden font-sans">
-      
-      {/* --- HEADER --- */}
-      <div className="pt-6 pb-4 px-4 flex justify-between items-center bg-[#0b262d] z-10 shadow-xl shadow-[#091f25]">
-        <div>
-            <h1 className="text-xl font-serif text-white tracking-wide">
-                {format(currentDate, 'MMMM')}
-            </h1>
-            <div className="flex items-center gap-2">
-                <p className="text-brand-gold text-xs uppercase tracking-[0.2em] opacity-80">
-                    {format(currentDate, 'yyyy')}
-                </p>
-                {/* Notification Button */}
-                <button onClick={handleEnableNotifications} className="bg-white/10 p-1 rounded-full text-brand-gold hover:bg-white/20">
-                    <FaBell size={10} />
-                </button>
-            </div>
+    <AdminLayout
+      title="Studio Calendar &amp; Dates"
+      subtitle="Track photoshoot bookings, blocked dates, and photographer assignments"
+      actions={
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+          >
+            <FaChevronLeft size={11} />
+          </button>
+          <span className="font-serif text-sm font-semibold text-white px-2">
+            {format(currentDate, 'MMMM yyyy')}
+          </span>
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+          >
+            <FaChevronRight size={11} />
+          </button>
         </div>
-        
-        <div className="flex gap-2">
-            <button onClick={prevMonth} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
-                <FaChevronLeft size={12}/>
-            </button>
-            <button onClick={nextMonth} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
-                <FaChevronRight size={12}/>
-            </button>
-        </div>
-      </div>
-
-      {/* --- WEEKDAYS --- */}
-      <div className="grid grid-cols-7 px-2 mb-2 bg-[#0b262d]">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-            <div key={i} className={`text-center text-[10px] font-bold py-2 ${i === 0 || i === 6 ? 'text-brand-red' : 'text-gray-500'}`}>
-                {day}
+      }
+    >
+      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-4 sm:p-6 shadow-xl max-w-5xl mx-auto">
+        {/* --- WEEKDAYS --- */}
+        <div className="grid grid-cols-7 px-2 mb-2">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
+            <div key={i} className={`text-center text-xs font-bold py-2 uppercase tracking-wider ${i === 0 || i === 6 ? 'text-brand-red' : 'text-brand-muted'}`}>
+              {day}
             </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
       {/* --- CALENDAR GRID --- */}
       <div className="flex-1 px-2 pb-20 overflow-y-auto no-scrollbar">
@@ -524,6 +506,7 @@ const AdminCalendar = () => {
                                     <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-lg border border-white/5">
                                         <FaUserTag className="text-gray-500" />
                                         <input 
+                                            id="manual-name-input"
                                             type="text" 
                                             placeholder="Or type name manually..." 
                                             value={tempName}
@@ -607,7 +590,8 @@ const AdminCalendar = () => {
             </div>
         )}
       </BottomDrawer>
-    </div>
+      </div>
+    </AdminLayout>
   );
 };
 
