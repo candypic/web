@@ -4,6 +4,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import {
   FaFolderOpen,
   FaPlus,
+  FaChevronLeft,
   FaCloudUploadAlt,
   FaTrashAlt,
   FaCopy,
