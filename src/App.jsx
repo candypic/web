@@ -28,40 +28,59 @@ import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 
-function App() {
-  const [loading, setLoading] = useState(true);
+// Component that listens for targeted notifications for the currently logged-in crew member
+function RealtimePushManager() {
+  const { session, user, crewProfile, isSuperAdmin } = useAuth();
 
-  // Global Realtime Push Listener for Android/iOS PWA devices
   useEffect(() => {
-    console.log('[CandyPic Push Listener] Initializing global realtime notification listener...');
     const hasNotification = typeof Notification !== 'undefined';
-    console.log('[CandyPic Push Listener] Notification API supported:', hasNotification);
-    if (hasNotification) {
-      console.log('[CandyPic Push Listener] Current permission:', Notification.permission);
-    }
+    if (!hasNotification) return;
+
+    const currentEmail = (user?.email || session?.user?.email || '').toLowerCase().trim();
+    const currentName = (crewProfile?.name || '').toLowerCase().trim();
+
+    console.log('[CandyPic Push Listener] Initialized for user:', currentEmail, currentName || '(admin)');
 
     const channel = supabase.channel('studio-live-events', {
-      config: { broadcast: { self: true } },
+      config: { broadcast: { self: false } },
     });
 
     channel
       .on('broadcast', { event: 'shoot-assigned' }, async ({ payload }) => {
-        console.log('[CandyPic Push Listener] 🔔 Incoming broadcast received! Payload:', payload);
+        console.log('[CandyPic Push Listener] 🔔 Incoming shoot assignment broadcast:', payload);
 
-        if (hasNotification && Notification.permission === 'granted') {
+        // Targeted Recipient Check:
+        const assignedTarget = (payload.assignedTeam || '').toLowerCase().trim();
+        const assignedList = Array.isArray(payload.assignedCrew)
+          ? payload.assignedCrew.map((c) => c.toLowerCase().trim())
+          : [assignedTarget];
+
+        // Is this device's logged-in user among the assigned crew?
+        const isRecipient =
+          (currentName && assignedList.some((name) => name.includes(currentName) || currentName.includes(name))) ||
+          (currentEmail && assignedList.some((name) => name.includes(currentEmail) || currentEmail.includes(name))) ||
+          (!currentEmail && !currentName); // Standalone PWA without login yet
+
+        if (!isRecipient) {
+          console.log(`[CandyPic Push Listener] ⏭️ Notification is targeted for ${assignedTarget}. Skipping display on this device.`);
+          return;
+        }
+
+        console.log(`[CandyPic Push Listener] 🎯 Notification matches this device (${currentName || currentEmail}). Triggering alert...`);
+
+        if (Notification.permission === 'granted') {
           try {
             if ('serviceWorker' in navigator) {
               const reg = await navigator.serviceWorker.ready;
-              console.log('[CandyPic Push Listener] ServiceWorker ready instance:', reg);
               if (reg && reg.showNotification) {
                 await reg.showNotification(payload.title || '📸 Candy Pic Shoot Assignment', {
                   body: payload.body || 'You have been assigned to an upcoming wedding shoot.',
                   icon: '/logo-nonsquare.png',
                   badge: '/logo-nonsquare.png',
-                  data: { url: '/admin/calendar' },
+                  data: { url: '/crew/calendar' },
                   vibrate: [200, 100, 200],
                 });
-                console.log('[CandyPic Push Listener] ✅ ServiceWorker showNotification triggered successfully!');
+                console.log('[CandyPic Push Listener] ✅ ServiceWorker showNotification triggered for assigned crew!');
                 return;
               }
             }
@@ -69,18 +88,33 @@ function App() {
               body: payload.body,
               icon: '/logo-nonsquare.png',
             });
-            console.log('[CandyPic Push Listener] ✅ Window Notification triggered!');
           } catch (e) {
             console.error('[CandyPic Push Listener] ❌ Notification display error:', e);
           }
-        } else {
-          console.warn('[CandyPic Push Listener] ⚠️ Cannot show notification. Permission is:', hasNotification ? Notification.permission : 'unsupported');
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_notifications' }, async (payload) => {
-        console.log('[CandyPic Push Listener] 🔔 Postgres Notification Insert received:', payload);
         const n = payload.new;
-        if (n && hasNotification && Notification.permission === 'granted') {
+        if (!n) return;
+
+        // If it's a general admin alert (e.g. new applicant), only show to Super Admin
+        if (n.type === 'general' && !isSuperAdmin) {
+          return;
+        }
+
+        // If it's a shoot assignment, check target metadata
+        if (n.metadata?.assigned_to) {
+          const target = n.metadata.assigned_to.toLowerCase().trim();
+          const matchesMe =
+            (currentName && (target.includes(currentName) || currentName.includes(target))) ||
+            (currentEmail && (target.includes(currentEmail) || currentEmail.includes(target)));
+
+          if (!matchesMe && !isSuperAdmin) {
+            return;
+          }
+        }
+
+        if (Notification.permission === 'granted') {
           try {
             if ('serviceWorker' in navigator) {
               const reg = await navigator.serviceWorker.ready;
@@ -89,7 +123,7 @@ function App() {
                   body: n.message || 'New shoot assigned',
                   icon: '/logo-nonsquare.png',
                   badge: '/logo-nonsquare.png',
-                  data: { url: n.link || '/admin/calendar' },
+                  data: { url: n.link || '/crew/calendar' },
                   vibrate: [200, 100, 200],
                 });
                 return;
@@ -99,19 +133,21 @@ function App() {
               body: n.message,
               icon: '/logo-nonsquare.png',
             });
-          } catch (e) {
-            console.error('[CandyPic Push Listener] Postgres notification display error:', e);
-          }
+          } catch (e) {}
         }
       })
-      .subscribe((status) => {
-        console.log('[CandyPic Push Listener] Channel studio-live-events subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [session, user, crewProfile, isSuperAdmin]);
+
+  return null;
+}
+
+function App() {
+  const [loading, setLoading] = useState(true);
 
   return (
     <>
@@ -122,6 +158,7 @@ function App() {
 
       {!loading && (
         <AuthProvider>
+          <RealtimePushManager />
           <Router>
             <PwaInstallPrompt />
             <div className="font-sans antialiased bg-brand-dark text-brand-text min-h-screen animate-fade-in">
