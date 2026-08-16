@@ -87,17 +87,17 @@ const Hero = () => {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.15, ease: 'easeOut' }}
-          className="flex flex-col items-center gap-2 md:gap-4 mb-6"
+          className="flex flex-col items-center gap-2 mb-6"
         >
-          {/* Rotating word — legible white/gold on the dark image */}
-          <RotatingText
-            texts={words}
-            mainClassName="justify-center font-serif font-semibold leading-none text-4xl sm:text-5xl md:text-7xl lg:text-8xl text-transparent bg-clip-text bg-gradient-to-r from-brand-gold via-brand-gold-soft to-brand-gold text-shadow-soft"
-            staggerFrom="last"
-            staggerDuration={0.025}
-            rotationInterval={5000}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          />
+          {/* Rotating word — single clean line with height locking */}
+          <div className="h-12 sm:h-16 md:h-24 lg:h-28 flex items-center justify-center">
+            <RotatingText
+              texts={words}
+              rotationInterval={3500}
+              mainClassName="font-serif font-semibold text-4xl sm:text-5xl md:text-7xl lg:text-8xl text-transparent bg-clip-text bg-gradient-to-r from-brand-gold via-brand-gold-soft to-brand-gold text-shadow-soft"
+            />
+          </div>
+
           {/* Static line completing the lockup */}
           <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl lg:text-7xl text-white leading-tight text-shadow-soft">
             Stories, Beautifully Told
@@ -109,7 +109,7 @@ const Hero = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 0.5 }}
-          className="font-serif text-lg sm:text-xl md:text-3xl lg:text-4xl text-brand-light/90 mb-5 md:mb-7 tracking-wide"
+          className="font-serif text-lg sm:text-xl md:text-3xl lg:text-4xl text-brand-light/90 mb-4 md:mb-6 tracking-wide"
         >
           Photography <span className="text-brand-gold">&amp;</span> Videography
         </motion.h2>
@@ -119,7 +119,7 @@ const Hero = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.6 }}
-          className="text-brand-muted text-sm sm:text-base md:text-lg max-w-2xl mb-8 md:mb-12 font-light leading-relaxed px-2 sm:px-0"
+          className="text-brand-muted text-sm sm:text-base md:text-lg max-w-2xl mb-8 md:mb-10 font-light leading-relaxed px-2 sm:px-0"
         >
           Capturing the unscripted magic of your love story — from the Haldi glow
           to the final Vidaai, we freeze emotions in time.
@@ -130,59 +130,52 @@ const Hero = () => {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.8, ease: 'easeOut' }}
-          className="flex flex-col items-stretch sm:flex-row sm:items-center sm:flex-wrap justify-center gap-3 sm:gap-4 w-full max-w-sm sm:max-w-none"
+          className="flex flex-col items-stretch sm:flex-row sm:items-center sm:flex-wrap justify-center gap-3 sm:gap-4 w-full max-w-sm sm:max-w-none mb-12 sm:mb-0"
         >
           {/* Primary */}
           <RouterLink to="/quotation" className="w-full sm:w-auto">
-            <button className="w-full sm:w-auto rounded-full px-8 py-4 bg-brand-gold text-brand-dark font-semibold tracking-wide uppercase text-sm hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none">
+            <button className="w-full sm:w-auto rounded-full px-8 py-4 bg-brand-gold text-brand-dark font-semibold tracking-wide uppercase text-sm hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none cursor-pointer">
               View Packages &amp; Quote
             </button>
           </RouterLink>
 
           {/* Secondary — Explore Portfolio (scroll) */}
           <ScrollLink to="portfolio" smooth duration={800} offset={-80} className="w-full sm:w-auto">
-            <button className="w-full sm:w-auto rounded-full px-8 py-4 border border-white/25 text-white hover:bg-white/10 hover:border-white backdrop-blur-sm transition-all uppercase tracking-wide text-sm focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none">
+            <button className="w-full sm:w-auto rounded-full px-8 py-4 border border-white/25 text-white hover:bg-white/10 hover:border-white backdrop-blur-sm transition-all uppercase tracking-wide text-sm focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none cursor-pointer">
               Explore Portfolio
             </button>
           </ScrollLink>
 
-          {/* New — View Gallery (route) */}
+          {/* View Gallery (route) */}
           <RouterLink to="/gallery" className="w-full sm:w-auto">
-            <button className="w-full sm:w-auto rounded-full px-8 py-4 border border-white/25 text-white hover:bg-white/10 hover:border-white backdrop-blur-sm transition-all uppercase tracking-wide text-sm focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none">
+            <button className="w-full sm:w-auto rounded-full px-8 py-4 border border-white/25 text-white hover:bg-white/10 hover:border-white backdrop-blur-sm transition-all uppercase tracking-wide text-sm focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none cursor-pointer">
               View Gallery
             </button>
           </RouterLink>
         </motion.div>
       </div>
 
-      {/* ── Scroll-Down Indicator ──────────────────────────────────────── */}
+      {/* ── Scroll-Down Indicator ── */}
       <ScrollLink
         to="portfolio"
         smooth
         duration={800}
         offset={-80}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 cursor-pointer group"
+        className="hidden md:flex absolute bottom-6 left-1/2 -translate-x-1/2 z-10 cursor-pointer group flex-col items-center gap-1.5"
         aria-label="Scroll to portfolio"
       >
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.8, duration: 1 }}
-          className="flex flex-col items-center gap-2"
-        >
-          <span className="text-[10px] uppercase tracking-[0.3em] text-brand-muted group-hover:text-brand-gold transition-colors">
-            Scroll
-          </span>
-          <span className="flex items-center justify-center h-10 w-6 rounded-full border border-white/25 group-hover:border-brand-gold transition-colors">
-            <motion.span
-              animate={{ y: [0, 6, 0], opacity: [1, 0.4, 1] }}
-              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-              className="text-brand-gold"
-            >
-              <FaChevronDown size={12} />
-            </motion.span>
-          </span>
-        </motion.div>
+        <span className="text-[10px] uppercase tracking-[0.3em] text-brand-muted group-hover:text-brand-gold transition-colors">
+          Scroll
+        </span>
+        <span className="flex items-center justify-center h-9 w-5 rounded-full border border-white/25 group-hover:border-brand-gold transition-colors">
+          <motion.span
+            animate={{ y: [0, 5, 0], opacity: [1, 0.4, 1] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+            className="text-brand-gold text-[10px]"
+          >
+            <FaChevronDown />
+          </motion.span>
+        </span>
       </ScrollLink>
     </div>
   );
