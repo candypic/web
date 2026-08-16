@@ -24,84 +24,52 @@ async function authHeader() {
 }
 
 // =========================================================================
-// 1. Storage Upload Engine (Cloudflare R2 + Supabase Storage Fallback)
+// 1. Storage Upload Engine (Cloudflare R2)
 // =========================================================================
 
 export async function uploadFileToR2(file, folder = 'gallery', onProgress) {
   const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${cleanName}`;
-  const bucketName = folder.startsWith('events') ? 'event-photos' : 'gallery';
 
-  // 1. First Attempt: Cloudflare R2 presigned upload if r2-sign edge function is active
-  if (FUNCTIONS_URL) {
-    try {
-      const headers = await authHeader();
-      const res = await fetch(`${FUNCTIONS_URL}/r2-sign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({
-          action: 'upload',
-          filename: key,
-          contentType: file.type || 'image/jpeg',
-        }),
-      });
+  const headers = await authHeader();
+  const res = await fetch(`${FUNCTIONS_URL}/r2-sign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({
+      action: 'upload',
+      filename: key,
+      contentType: file.type || 'image/jpeg',
+    }),
+  });
 
-      if (res.ok) {
-        const { uploadUrl, key: r2Key, publicUrl } = await res.json();
-        if (uploadUrl) {
-          await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', uploadUrl);
-            if (file.type) xhr.setRequestHeader('Content-Type', file.type);
-            xhr.upload.onprogress = (e) => {
-              if (e.lengthComputable && onProgress) {
-                onProgress(Math.round((e.loaded / e.total) * 100));
-              }
-            };
-            xhr.onload = () => {
-              if (xhr.status >= 200 && xhr.status < 300) resolve();
-              else reject(new Error(`R2 status ${xhr.status}`));
-            };
-            xhr.onerror = () => reject(new Error('R2 Network error'));
-            xhr.send(file);
-          });
+  if (!res.ok) {
+    throw new Error(`Could not get an R2 upload URL (${res.status}). Check the r2-sign function secrets.`);
+  }
 
-          const finalUrl = publicUrl || (R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${r2Key}` : r2Key);
-          return { key: r2Key, publicUrl: finalUrl };
-        }
+  const { uploadUrl, key: r2Key, publicUrl } = await res.json();
+  if (!uploadUrl) {
+    throw new Error('R2 did not return an upload URL — check R2_ACCOUNT_ID/R2_BUCKET secrets.');
+  }
+
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
       }
-    } catch (r2Err) {
-      console.warn('R2 edge function skipped, using Supabase Storage:', r2Err);
-    }
-  }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`R2 upload failed (status ${xhr.status}). Check the bucket's CORS policy.`));
+    };
+    xhr.onerror = () => reject(new Error('R2 network error — check the bucket CORS policy allows this origin.'));
+    xhr.send(file);
+  });
 
-  // 2. Second Attempt (Rock Solid): Supabase Storage
-  try {
-    const { data, error: uploadErr } = await supabase.storage
-      .from(bucketName)
-      .upload(key, file, {
-        cacheControl: '3600',
-        upsert: true,
-      });
-
-    if (uploadErr) {
-      // If bucket doesn't exist, try default 'gallery'
-      const { data: fbData, error: fbErr } = await supabase.storage
-        .from('gallery')
-        .upload(key, file, { cacheControl: '3600', upsert: true });
-
-      if (fbErr) throw fbErr;
-    }
-
-    const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(key);
-    if (onProgress) onProgress(100);
-    return { key, publicUrl: urlData.publicUrl };
-  } catch (storageErr) {
-    console.error('Supabase storage upload error:', storageErr);
-    throw new Error(
-      `Upload failed: ${storageErr.message || 'Please create the storage bucket in Supabase.'}`
-    );
-  }
+  const finalUrl = publicUrl || (R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${r2Key}` : r2Key);
+  return { key: r2Key, publicUrl: finalUrl };
 }
 
 // =========================================================================
