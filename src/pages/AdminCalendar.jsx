@@ -61,6 +61,8 @@ export default function AdminCalendar() {
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'create' | 'block' | 'credentials'
   const [editingId, setEditingId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
   const [filterType, setFilterType] = useState('all'); // 'all' | 'bookings' | 'blocks' | 'pending'
 
   // Generated Credentials Modal State
@@ -222,7 +224,9 @@ export default function AdminCalendar() {
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
+    setSaveSuccessMsg('');
+
     try {
       const formattedStartDate = formData.startDate || (selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
       const formattedEndDate = formData.endDate || formattedStartDate;
@@ -264,74 +268,73 @@ export default function AdminCalendar() {
         if (error) throw error;
       }
 
-      // 1. Dispatch Assignment Notification for each selected crew member
-      for (const memberName of allSelectedCrew) {
-        const assignedMember = crewMembers.find((c) => c.name === memberName);
-        const crewPhone = assignedMember?.phone || '';
-        // Deep link straight into this crew member's own calendar — tapping the
-        // notification resolves + persists their identity on this device (no
-        // separate login step) instead of dropping them on the admin login page.
-        const crewDeepLink = `/crew/calendar${
-          assignedMember?.email ? `?email=${encodeURIComponent(assignedMember.email)}` : ''
-        }`;
+      // Non-blocking async background notifications & push dispatch
+      (async () => {
+        for (const memberName of allSelectedCrew) {
+          const assignedMember = crewMembers.find((c) => c.name === memberName);
+          const crewPhone = assignedMember?.phone || '';
+          const crewDeepLink = `/crew/calendar${
+            assignedMember?.email ? `?email=${encodeURIComponent(assignedMember.email)}` : ''
+          }`;
 
-        try {
-          await createAdminNotification({
-            title: `📅 Shoot Assigned: ${memberName}`,
-            message: `${memberName} assigned to ${formData.clientName} (${formData.eventType}) on ${formattedStartDate}.`,
-            type: 'booking',
-            link: crewDeepLink,
-            metadata: {
-              assigned_to: memberName,
-              email: assignedMember?.email || '',
-              phone: crewPhone,
-              date: formattedStartDate,
-              client: formData.clientName,
-              venue: formData.venueLocation,
-            },
-          });
-
-          // Realtime Push Broadcast across all PWA devices & crew phones
-          const broadcastChannel = supabase.channel('studio-live-events', {
-            config: { broadcast: { self: false } },
-          });
-
-          const sendPayload = {
-            type: 'broadcast',
-            event: 'shoot-assigned',
-            payload: {
-              title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
-              body: `Hi ${memberName}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
-              assignedTeam: memberName,
-              email: assignedMember?.email || '',
-              date: formattedStartDate,
-              client: formData.clientName,
-              venue: formData.venueLocation,
-              url: crewDeepLink,
-            },
-          };
-
-          if (broadcastChannel.state === 'joined') {
-            await broadcastChannel.send(sendPayload);
-          } else {
-            broadcastChannel.subscribe(async (status) => {
-              if (status === 'SUBSCRIBED') {
-                await broadcastChannel.send(sendPayload);
-              }
+          try {
+            await createAdminNotification({
+              title: `📅 Shoot Assigned: ${memberName}`,
+              message: `${memberName} assigned to ${formData.clientName} (${formData.eventType}) on ${formattedStartDate}.`,
+              type: 'booking',
+              link: crewDeepLink,
+              metadata: {
+                assigned_to: memberName,
+                email: assignedMember?.email || '',
+                phone: crewPhone,
+                date: formattedStartDate,
+                client: formData.clientName,
+                venue: formData.venueLocation,
+              },
             });
-          }
 
-          // Real FCM lock-screen push — reaches the device even if the app is closed
-          await sendCrewPush({
-            tokens: [assignedMember?.push_token],
-            title: sendPayload.payload.title,
-            message: sendPayload.payload.body,
-            link: crewDeepLink,
-          });
-        } catch (notifErr) {
-          console.warn('Crew notification dispatch skipped for:', memberName, notifErr);
+            // Realtime Push Broadcast across all PWA devices & crew phones
+            const broadcastChannel = supabase.channel('studio-live-events', {
+              config: { broadcast: { self: false } },
+            });
+
+            const sendPayload = {
+              type: 'broadcast',
+              event: 'shoot-assigned',
+              payload: {
+                title: `📸 Shoot Assigned: ${formData.eventType || 'Wedding Photography'}`,
+                body: `Hi ${memberName}! You are assigned to ${formData.clientName} on ${formattedStartDate} (${formData.venueLocation || 'Gokarna / Kumta'}).`,
+                assignedTeam: memberName,
+                email: assignedMember?.email || '',
+                date: formattedStartDate,
+                client: formData.clientName,
+                venue: formData.venueLocation,
+                url: crewDeepLink,
+              },
+            };
+
+            if (broadcastChannel.state === 'joined') {
+              await broadcastChannel.send(sendPayload);
+            } else {
+              broadcastChannel.subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                  await broadcastChannel.send(sendPayload);
+                }
+              });
+            }
+
+            // Real FCM lock-screen push — reaches the device even if the app is closed
+            await sendCrewPush({
+              tokens: [assignedMember?.push_token],
+              title: sendPayload.payload.title,
+              message: sendPayload.payload.body,
+              link: crewDeepLink,
+            });
+          } catch (notifErr) {
+            console.warn('Crew notification dispatch skipped for:', memberName, notifErr);
+          }
         }
-      }
+      })();
 
       // Auto-generate Client Memory Vault if toggle is checked
       if (formData.autoGenerateVault) {
@@ -355,6 +358,7 @@ export default function AdminCalendar() {
           setGeneratedVault(newVault);
           await fetchData();
           setViewMode('credentials');
+          setSaveSuccessMsg(`Booking created & Vault generated for ${formData.clientName}!`);
           return;
         } catch (vaultErr) {
           console.warn('Auto vault creation skipped:', vaultErr);
@@ -363,10 +367,11 @@ export default function AdminCalendar() {
 
       await fetchData();
       setViewMode('list');
+      setSaveSuccessMsg(`Booking successfully scheduled for ${formData.clientName}!`);
     } catch (error) {
       alert(`Failed to save booking: ${error.message}`);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -682,7 +687,22 @@ export default function AdminCalendar() {
 
           {/* VIEW 1: LIST ACTIVITIES ON SELECTED DATE */}
           {viewMode === 'list' && (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              {saveSuccessMsg && (
+                <div className="p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-2xl text-xs font-semibold flex items-center justify-between animate-fade-in shadow-lg shadow-emerald-500/5">
+                  <span className="flex items-center gap-2">
+                    <FaCheck className="text-emerald-400 shrink-0" size={12} /> {saveSuccessMsg}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSaveSuccessMsg('')}
+                    className="text-white/60 hover:text-white text-xs px-2 py-0.5"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* Actions Bar */}
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -1132,10 +1152,10 @@ export default function AdminCalendar() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="rounded-full px-7 py-3 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 cursor-pointer"
+                  disabled={isSaving}
+                  className="rounded-full px-7 py-3 bg-brand-gold text-brand-dark font-bold text-xs uppercase tracking-wider hover:bg-brand-gold-soft transition-all shadow-lg shadow-brand-gold/20 cursor-pointer disabled:opacity-60"
                 >
-                  {isLoading ? 'Saving Booking...' : 'Save & Block Calendar'}
+                  {isSaving ? 'Saving Booking...' : 'Save & Block Calendar'}
                 </button>
               </div>
             </form>
