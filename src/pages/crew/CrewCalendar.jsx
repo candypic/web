@@ -401,14 +401,31 @@ export default function CrewCalendar() {
                         </div>
                       </div>
 
-                      {/* Shoot Itinerary Details */}
-                      <div className="space-y-2 text-xs text-brand-muted font-light">
-                        {shoot.additional_info && (
-                          <div className="p-3 bg-black/40 rounded-2xl border border-white/10 text-white/90 text-xs leading-relaxed space-y-1">
-                            <p className="whitespace-pre-line">{shoot.additional_info}</p>
+                      {/* Shoot Itinerary Details (Financials Hidden From Crew) */}
+                      {shoot.additional_info && (() => {
+                        const sanitizedDetails = shoot.additional_info
+                          .split('|')
+                          .map((s) => s.trim())
+                          .filter(
+                            (s) =>
+                              !s.toLowerCase().includes('advance') &&
+                              !s.toLowerCase().includes('total') &&
+                              !s.toLowerCase().includes('budget') &&
+                              !s.includes('💰') &&
+                              !s.includes('💵')
+                          )
+                          .join('  •  ');
+
+                        if (!sanitizedDetails) return null;
+
+                        return (
+                          <div className="space-y-2 text-xs text-brand-muted font-light">
+                            <div className="p-3 bg-black/40 rounded-2xl border border-white/10 text-white/90 text-xs leading-relaxed">
+                              <p className="whitespace-pre-line">{sanitizedDetails}</p>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()}
 
                       {/* 1-Tap Crew Actions: WhatsApp & Direct Call */}
                       <div className="grid grid-cols-2 gap-2 pt-1">

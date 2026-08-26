@@ -845,7 +845,33 @@ export default function AdminCalendar() {
                                       `💍 *Event:* ${ev.event_type || 'Wedding Photography'}\n` +
                                       `🗓 *Date:* ${ev.booking_date}\n` +
                                       `👥 *Client:* ${ev.client_name} (${ev.client_phone || 'No phone'})\n` +
-                                      (ev.additional_info ? `📝 *Details:* ${ev.additional_info}\n` : '') +
+                                      ((ev.additional_info || '')
+                                        .split('|')
+                                        .map((s) => s.trim())
+                                        .filter(
+                                          (s) =>
+                                            !s.toLowerCase().includes('advance') &&
+                                            !s.toLowerCase().includes('total') &&
+                                            !s.toLowerCase().includes('budget') &&
+                                            !s.includes('💰') &&
+                                            !s.includes('💵')
+                                        )
+                                        .join('\n')
+                                        ? `📝 *Details:*\n` +
+                                          (ev.additional_info || '')
+                                            .split('|')
+                                            .map((s) => s.trim())
+                                            .filter(
+                                              (s) =>
+                                                !s.toLowerCase().includes('advance') &&
+                                                !s.toLowerCase().includes('total') &&
+                                                !s.toLowerCase().includes('budget') &&
+                                                !s.includes('💰') &&
+                                                !s.includes('💵')
+                                            )
+                                            .join('\n') +
+                                          `\n`
+                                        : '') +
                                       `\nPlease confirm your availability with Chandan.`
                                     )}`}
                                     target="_blank"
