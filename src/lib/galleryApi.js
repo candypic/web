@@ -482,15 +482,20 @@ const PLACEHOLDER_PUSH_TOKENS = new Set(['web_push_granted']);
 
 export async function sendCrewPush({ tokens = [], title, message, link }) {
   const validTokens = (tokens || []).filter((t) => t && !PLACEHOLDER_PUSH_TOKENS.has(t));
-  if (validTokens.length === 0) return;
+  if (validTokens.length === 0 || !FUNCTIONS_URL) return;
 
   try {
     const headers = await authHeader();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
     await fetch(`${FUNCTIONS_URL}/send-crew-push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ tokens: validTokens, title, body: message, url: link }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
   } catch (e) {
     console.warn('FCM push dispatch skipped:', e);
   }
