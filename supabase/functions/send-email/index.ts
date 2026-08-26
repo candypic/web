@@ -22,29 +22,12 @@ serve(async (req) => {
       });
     }
 
-    const SMTP_HOST = Deno.env.get("SMTP_HOST") || "smtppro.zoho.in";
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+    const SMTP_HOST = Deno.env.get("SMTP_HOST") || "smtp.zoho.in";
     const SMTP_PORT = parseInt(Deno.env.get("SMTP_PORT") || "465", 10);
     const SMTP_USER = Deno.env.get("SMTP_USER") || "chandan@candypic.com";
     const SMTP_PASS = Deno.env.get("SMTP_PASS") || "";
-    const SMTP_FROM = Deno.env.get("SMTP_FROM") || `Chandan Naik | Candy Pic <${SMTP_USER}>`;
-
-    if (!SMTP_PASS) {
-      console.warn("SMTP_PASS secret is not configured in Supabase. Email sending skipped.");
-      return new Response(
-        JSON.stringify({ success: false, message: "SMTP_PASS not configured in Supabase secrets" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465, // true for 465, false for other ports
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
-    });
+    const SMTP_FROM = Deno.env.get("EMAIL_FROM") || Deno.env.get("SMTP_FROM") || `Chandan Naik | Candy Pic <${SMTP_USER}>`;
 
     const isApproval = type === "profile-approved";
     const subject = isApproval
@@ -126,20 +109,60 @@ serve(async (req) => {
         </div>
       `;
 
-    await transporter.sendMail({
-      from: SMTP_FROM,
-      to,
-      subject,
-      html,
-    });
+    // 1. If Resend API Key is configured (100% Free, sends from chandan@candypic.com)
+    if (RESEND_API_KEY) {
+      console.log(`[CandyPic Email] 🚀 Sending via Resend API to ${to}...`);
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: SMTP_FROM,
+          to: [to],
+          subject,
+          html,
+        }),
+      });
 
-    console.log(`[CandyPic Email] ✅ Email sent successfully to ${to}`);
+      const resendData = await resendRes.json();
+      if (!resendRes.ok) {
+        throw new Error(resendData?.message || JSON.stringify(resendData));
+      }
 
-    return new Response(JSON.stringify({ success: true, message: `Email delivered to ${to}` }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      return new Response(JSON.stringify({ success: true, id: resendData.id, message: `Email delivered to ${to} via Resend` }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2. Fallback to SMTP (Zoho / Custom)
+    if (SMTP_PASS) {
+      const transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to,
+        subject,
+        html,
+      });
+
+      return new Response(JSON.stringify({ success: true, message: `Email delivered to ${to} via SMTP` }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    throw new Error("Neither RESEND_API_KEY nor SMTP_PASS is configured in Supabase secrets.");
   } catch (error) {
-    console.error("[CandyPic Email] ❌ SMTP Error:", error);
+    console.error("[CandyPic Email] ❌ Dispatch Error:", error);
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
