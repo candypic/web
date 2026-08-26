@@ -16,11 +16,15 @@ const R2_PUBLIC_URL = (import.meta.env.VITE_R2_PUBLIC_URL || '').replace(/\/$/, 
 
 // Helper to get auth header for edge functions
 async function authHeader() {
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return {};
-  return { Authorization: `Bearer ${session.access_token}` };
+  const token = session?.access_token || anonKey;
+  return {
+    apikey: anonKey,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 // =========================================================================
