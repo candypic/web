@@ -501,3 +501,26 @@ export async function sendCrewPush({ tokens = [], title, message, link }) {
   }
 }
 
+// =========================================================================
+// 10. Email Dispatch (Zoho Mail SMTP / Custom Domain chandan@candypic.com)
+// =========================================================================
+
+export async function sendCrewEmail(params) {
+  if (!params?.to || !FUNCTIONS_URL) return;
+  try {
+    const headers = await authHeader();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    await fetch(`${FUNCTIONS_URL}/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (e) {
+    console.warn('Crew email dispatch skipped:', e);
+  }
+}
+

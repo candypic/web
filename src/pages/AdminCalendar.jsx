@@ -47,6 +47,7 @@ import {
   rejectCrewMember,
   createAdminNotification,
   sendCrewPush,
+  sendCrewEmail,
 } from '../lib/galleryApi';
 import { Link } from 'react-router-dom';
 
@@ -330,6 +331,22 @@ export default function AdminCalendar() {
               message: sendPayload.payload.body,
               link: crewDeepLink,
             });
+
+            // Automated Email Dispatch from chandan@candypic.com (Zoho Mail SMTP)
+            if (assignedMember?.email) {
+              await sendCrewEmail({
+                to: assignedMember.email,
+                crewName: memberName,
+                clientName: formData.clientName,
+                eventType: formData.eventType,
+                date: formattedStartDate,
+                slot: formData.sessionSlot,
+                venue: formData.venueLocation,
+                clientPhone: formData.clientPhone,
+                link: crewDeepLink,
+                type: 'shoot-assigned',
+              });
+            }
           } catch (notifErr) {
             console.warn('Crew notification dispatch skipped for:', memberName, notifErr);
           }

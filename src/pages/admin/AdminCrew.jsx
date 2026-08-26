@@ -24,6 +24,7 @@ import {
   rejectCrewMember,
   createAdminNotification,
   sendCrewPush,
+  sendCrewEmail,
 } from '../../lib/galleryApi';
 
 export default function AdminCrew() {
@@ -119,6 +120,16 @@ export default function AdminCrew() {
             message: `Hi ${targetMember.name}! Chandan approved your profile as ${targetMember.role}. Tap to open your schedule.`,
             link: approvalPayload.payload.url,
           });
+
+          // Automated Welcome Email from chandan@candypic.com (Zoho Mail SMTP)
+          if (targetMember.email) {
+            await sendCrewEmail({
+              to: targetMember.email,
+              crewName: targetMember.name,
+              link: approvalPayload.payload.url,
+              type: 'profile-approved',
+            });
+          }
         } catch (pushErr) {
           console.warn('Approval push dispatch skipped:', pushErr);
         }
